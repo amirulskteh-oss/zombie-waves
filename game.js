@@ -413,7 +413,7 @@
       credits += 20;
       blood(z.x, z.y, 36);
       addStain(z.x, z.y, rand(22, 30));
-      shake = Math.min(shake + 10, 18);
+      shake = Math.min(shake + 12, 18);
       for (let i = 0; i < 8; i++) gems.push({ x: z.x + rand(-30, 30), y: z.y + rand(-30, 30), vx: rand(-90, 90), vy: rand(-90, 90) });
       drops.push({ x: z.x + rand(-15, 15), y: z.y + rand(-15, 15), t: 25, type: 'heal' });
       drops.push({ x: z.x + rand(-15, 15), y: z.y + rand(-15, 15), t: 25, type: 'weapon', weapon: Math.random() < 0.5 ? 'shotgun' : 'rifle' });
@@ -422,6 +422,7 @@
     } else {
       score += 10;
       blood(z.x, z.y, 12);
+      shake = Math.min(shake + 3, 14);
       for (let i = 0; i < 4; i++) parts.push({ kind: 'gib', x: z.x, y: z.y, vx: rand(-160, 160), vy: rand(-160, 160), life: rand(0.4, 0.8), max: 0.8, size: rand(3.5, 6), c: pick(['#7a0f1a', '#5c0c14']), fr: 3, rot: rand(0, TAU), vr: rand(-8, 8), stain: true });
       addStain(z.x, z.y, rand(10, 17));
       gems.push({ x: z.x + rand(-8, 8), y: z.y + rand(-8, 8), vx: rand(-60, 60), vy: rand(-60, 60) });
@@ -791,6 +792,7 @@
           }
           z.hp -= b.dmg;
           z.flash = 0.08;
+          shake = Math.min(shake + (z.type === 'boss' ? 2.5 : 1.5), 14);
           blood(b.x, b.y, 4, Math.atan2(b.vy, b.vx), 0.7);
           parts.push({ kind: 'flash', x: b.x, y: b.y, vx: 0, vy: 0, life: 0.12, max: 0.12, size: 7, c: '#fff2c0' });
           floats.push({ x: z.x, y: z.y - z.r - 6, t: 0.7, txt: String(Math.round(b.dmg)) });
