@@ -331,7 +331,7 @@
     { nm: 'High Contrast', ds: 'Colorblind-friendly palette and outlines', get: () => highContrast, on: '◐ On', off: '◐ Off', toggle: toggleHighContrast },
     { nm: 'Colorblind Palette', ds: 'Hue shift for deutan/protan/tritan vision', get: () => cbMode, modes: CB_NAMES, cycle: cycleColorblind },
     { nm: 'HUD Text Scale', ds: 'Size of in-game text and numbers', slider: true, get: () => hudScale, set: setHudScale },
-    { nm: 'Screen Shake', ds: 'Camera motion intensity on hits and dashes', slider: true, get: () => shakeLevel, set: setShake },
+    { nm: 'Screen Shake', ds: 'Camera motion intensity on hits and dashes', slider: true, get: () => shakeLevel, set: setShake, previewBtn: () => { shake = 14; } },
   ];
   function setVolume(v) {
     volume = clamp(Math.round(v), 0, 100);
@@ -362,13 +362,16 @@
       if (r.slider) {
         row.innerHTML =
           `<div class="pinfo"><div class="pnm">${r.nm} <span class="plv">${r.get()}%</span></div><div class="pds">${r.ds}</div></div>` +
-          `<div class="volwrap"><div class="voltrack"><input type="range" min="0" max="100" step="5" value="${r.get()}"><div class="volticks">${'<i></i>'.repeat(11)}</div></div></div>`;
+          `<div class="volwrap"><div class="voltrack"><input type="range" min="0" max="100" step="5" value="${r.get()}"><div class="volticks">${'<i></i>'.repeat(11)}</div></div>${r.previewBtn ? `<button class="buy shakeprev" title="Preview">⚡</button>` : ''}</div>`;
         const input = row.querySelector('input');
         const pct = row.querySelector('.plv');
         const ticks = row.querySelector('.volticks');
         const fader = makeFader([pct, ticks], input);
         const fade = attachFade(row, fader, { input });
         let lastTick = 0;
+        if (r.previewBtn) {
+          row.querySelector('.shakeprev').addEventListener('click', () => { r.previewBtn(); sfx.dash(); });
+        }
         input.addEventListener('input', () => {
           r.set(+input.value);
           input.value = String(r.get());
