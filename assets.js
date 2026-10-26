@@ -208,5 +208,33 @@
     g.fillRect(14, 1, 3, 3);
   });
 
+  // Player reload animation frames: gun dips on a sine curve while the
+  // magazine slides up into the grip. Pivot (grip) at (10, 14).
+  sprites.reload = [];
+  const RELOAD_FRAMES = 6;
+  for (let i = 0; i < RELOAD_FRAMES; i++) {
+    const p = i / (RELOAD_FRAMES - 1);
+    sprites.reload.push(make(40, 34, (g, w, h) => {
+      const px = 10, py = 14;
+      const dip = Math.sin(p * Math.PI) * 1.15;
+      const mp = Math.max(0, Math.min(1, (p - 0.25) / 0.5));
+      g.translate(px, py);
+      g.rotate(dip);
+      g.fillStyle = '#8f9aa6';
+      g.fillRect(2, -3.5, 24, 7);
+      g.fillStyle = '#cfd6de';
+      g.fillRect(2, -3.5, 24, 3);
+      if (mp > 0) {
+        g.fillStyle = '#4a5560';
+        g.fillRect(6, 6 + (1 - mp) * 12, 6, 9);
+        g.fillStyle = '#2f3a44';
+        g.fillRect(6, 6 + (1 - mp) * 12, 6, 2.5);
+      }
+      g.fillStyle = '#d9a066';
+      g.beginPath(); g.arc(10, -5, 4, 0, TAU); g.fill();
+      g.beginPath(); g.arc(10, 5, 4, 0, TAU); g.fill();
+    }));
+  }
+
   window.ZWAssets = sprites;
 })();
