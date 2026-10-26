@@ -1035,6 +1035,19 @@
       ctx.fillStyle = 'rgba(255,226,140,' + (muzzle * 16).toFixed(3) + ')';
       ctx.beginPath(); ctx.arc(mmx, mmy, 5, 0, TAU); ctx.fill();
     }
+    // reload progress ring around the player
+    if (player.reloading > 0) {
+      const prog = 1 - player.reloading / player.reloadTotal;
+      ctx.strokeStyle = 'rgba(255,150,80,0.85)';
+      ctx.lineWidth = 3.5;
+      ctx.beginPath();
+      ctx.arc(player.x, feetY, player.r + 12, -Math.PI / 2, -Math.PI / 2 + prog * TAU);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,150,80,0.2)';
+      ctx.beginPath();
+      ctx.arc(player.x, feetY, player.r + 12, -Math.PI / 2 + prog * TAU, -Math.PI / 2 + TAU);
+      ctx.stroke();
+    }
     if (player.hitCd > 0.3) {
       ctx.strokeStyle = 'rgba(229,72,77,0.7)';
       ctx.lineWidth = 2;
