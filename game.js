@@ -87,6 +87,7 @@
   let shake = 0, hurtFlash = 0, muzzle = 0;
   let hitstop = 0, killFlash = 0;
   let zoomPunch = 0;
+  let slowmo = 0;
   const xpNeed = () => 5 + level * 3;
 
   let score = 0, bossRef = null;
@@ -348,7 +349,7 @@
     });
     waveActive = false; interTimer = 2.5;
     state = 'playing'; paused = false; settingsOpen = false;
-    hitstop = 0; killFlash = 0; zoomPunch = 0;
+    hitstop = 0; killFlash = 0; zoomPunch = 0; slowmo = 0;
     shake = 0; hurtFlash = 0;
     hideAll();
     banner('GET READY');
@@ -420,6 +421,7 @@
       hitstop = 0.12;
       killFlash = 0.9;
       zoomPunch = 0.16;
+      slowmo = 0.7;
       for (let i = 0; i < 8; i++) gems.push({ x: z.x + rand(-30, 30), y: z.y + rand(-30, 30), vx: rand(-90, 90), vy: rand(-90, 90) });
       drops.push({ x: z.x + rand(-15, 15), y: z.y + rand(-15, 15), t: 25, type: 'heal' });
       drops.push({ x: z.x + rand(-15, 15), y: z.y + rand(-15, 15), t: 25, type: 'weapon', weapon: Math.random() < 0.5 ? 'shotgun' : 'rifle' });
@@ -432,6 +434,7 @@
       hitstop = Math.max(hitstop, 0.045);
       killFlash = Math.max(killFlash, 0.5);
       zoomPunch = Math.min(zoomPunch + 0.035, 0.15);
+      slowmo = Math.max(slowmo, 0.4);
       for (let i = 0; i < 4; i++) parts.push({ kind: 'gib', x: z.x, y: z.y, vx: rand(-160, 160), vy: rand(-160, 160), life: rand(0.4, 0.8), max: 0.8, size: rand(3.5, 6), c: pick(['#7a0f1a', '#5c0c14']), fr: 3, rot: rand(0, TAU), vr: rand(-8, 8), stain: true });
       addStain(z.x, z.y, rand(10, 17));
       gems.push({ x: z.x + rand(-8, 8), y: z.y + rand(-8, 8), vx: rand(-60, 60), vy: rand(-60, 60) });
@@ -1210,8 +1213,14 @@
     const dt = Math.min((now - last) / 1000, 0.033);
     last = now;
     if (state === 'playing' && !paused) {
-      if (hitstop > 0) hitstop -= dt; // freeze frame: world holds while the kill lands
-      else update(dt);
+      if (hitstop > 0) {
+        hitstop -= dt; // freeze frame: world holds while the kill lands
+      } else if (slowmo > 0) {
+        slowmo -= dt; // cinematic slow-motion ramp after the freeze
+        update(dt * 0.35);
+      } else {
+        update(dt);
+      }
     }
     draw();
     updateHud();
