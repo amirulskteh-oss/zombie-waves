@@ -603,7 +603,8 @@
   }
 
   // ---------- update ----------
-  function update(dt) {
+  function update(dt, rdt) {
+    rdt = rdt || dt; // real time: used for wave pacing so slow-mo never delays spawns
     time += dt;
     shake = Math.max(0, shake - 26 * dt);
     hurtFlash = Math.max(0, hurtFlash - dt);
@@ -644,7 +645,7 @@
     // waves / spawning
     if (waveActive) {
       if (spawned < toSpawn) {
-        spawnTimer -= dt;
+        spawnTimer -= rdt;
         if (spawnTimer <= 0) {
           const batch = Math.min(1 + Math.floor(wave / 5), toSpawn - spawned);
           for (let i = 0; i < batch; i++) spawnZombie();
@@ -660,7 +661,7 @@
         openShop();
       }
     } else {
-      interTimer -= dt;
+      interTimer -= rdt;
       if (interTimer <= 0) beginWave();
     }
 
@@ -1217,9 +1218,9 @@
         hitstop -= dt; // freeze frame: world holds while the kill lands
       } else if (slowmo > 0) {
         slowmo -= dt; // cinematic slow-motion ramp after the freeze
-        update(dt * 0.35);
+        update(dt * 0.35, dt);
       } else {
-        update(dt);
+        update(dt, dt);
       }
     }
     draw();
