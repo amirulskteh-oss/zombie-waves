@@ -1187,11 +1187,18 @@
       ctx.lineWidth = 2;
       ctx.beginPath(); ctx.arc(player.x, feetY + 2 - sp.h * s * 0.5, player.r * s + 1, 0, TAU); ctx.stroke();
     }
-    // gun rotates toward aim, held at chest height
+    // gun rotates toward aim, held at chest height; dips and reloads its magazine mid-swing
     const gy = feetY + 2 - sp.h * s * 0.5;
+    let gAngle = player.aim;
+    let magP = 0;
+    if (player.reloading > 0 && player.reloadTotal > 0) {
+      const p = clamp(1 - player.reloading / player.reloadTotal, 0, 1);
+      gAngle = player.aim + Math.sin(p * Math.PI) * 1.15; // swings down mid-reload, returns for the end
+      magP = clamp((p - 0.25) / 0.5, 0, 1); // magazine slides in during the middle of the reload
+    }
     ctx.save();
     ctx.translate(player.x, gy);
-    ctx.rotate(player.aim);
+    ctx.rotate(gAngle);
     ctx.fillStyle = '#8f9aa6';
     ctx.fillRect(player.r * 0.2, -3.5, player.r + 16, 7);
     ctx.fillStyle = '#cfd6de';
@@ -1199,6 +1206,13 @@
     ctx.fillStyle = '#d9a066';
     ctx.beginPath(); ctx.arc(player.r * 0.85, -5, 4, 0, TAU); ctx.fill();
     ctx.beginPath(); ctx.arc(player.r * 0.85, 5, 4, 0, TAU); ctx.fill();
+    if (magP > 0) {
+      // magazine sliding up into the grip
+      ctx.fillStyle = '#4a5560';
+      ctx.fillRect(player.r * 0.3, 6 + (1 - magP) * 12, 6, 9);
+      ctx.fillStyle = '#2f3a44';
+      ctx.fillRect(player.r * 0.3, 6 + (1 - magP) * 12, 6, 2.5);
+    }
     ctx.restore();
     if (muzzle > 0) {
       const mmx = player.x + Math.cos(player.aim) * (player.r + 18);
