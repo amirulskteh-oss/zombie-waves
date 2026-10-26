@@ -88,6 +88,7 @@
   let hitstop = 0, killFlash = 0;
   let zoomPunch = 0;
   let slowmo = 0;
+  let hitMarker = 0, aimTargetRef = null;
   const xpNeed = () => 5 + level * 3;
 
   let score = 0, bossRef = null;
@@ -349,7 +350,7 @@
     });
     waveActive = false; interTimer = 2.5;
     state = 'playing'; paused = false; settingsOpen = false;
-    hitstop = 0; killFlash = 0; zoomPunch = 0; slowmo = 0;
+    hitstop = 0; killFlash = 0; zoomPunch = 0; slowmo = 0; hitMarker = 0; aimTargetRef = null;
     shake = 0; hurtFlash = 0;
     hideAll();
     banner('GET READY');
@@ -610,6 +611,7 @@
     hurtFlash = Math.max(0, hurtFlash - dt);
     muzzle = Math.max(0, muzzle - dt);
     killFlash = Math.max(0, killFlash - dt * 3.5);
+    hitMarker = Math.max(0, hitMarker - dt);
     zoomPunch = Math.max(0, zoomPunch - dt * 2.2);
 
     // movement
@@ -671,6 +673,7 @@
       const d2 = dist2(z.x, z.y, player.x, player.y);
       if (d2 < best) { best = d2; target = z; }
     }
+    aimTargetRef = target;
     player.fireCd -= dt;
     if (target && best < 560 * 560 && player.fireCd <= 0) {
       const W = WEAPONS[player.weapon];
@@ -808,6 +811,7 @@
           }
           z.hp -= b.dmg;
           z.flash = 0.08;
+          hitMarker = 0.15;
           shake = Math.min(shake + (z.type === 'boss' ? 2.5 : 1.5), 14);
           if (z.type === 'boss') zoomPunch = Math.min(zoomPunch + 0.03, 0.15);
           blood(b.x, b.y, 4, Math.atan2(b.vy, b.vx), 0.7);
@@ -1093,6 +1097,35 @@
     renderList.push({ y: player.y + player.r, draw: drawPlayer });
     renderList.sort((a, b) => a.y - b.y);
     for (const item of renderList) item.draw();
+
+    // aim reticle on the current target + hit marker flash on connected shots
+    if (aimTargetRef && !aimTargetRef.dead) {
+      const s = depthScale(aimTargetRef.y);
+      const rr2 = (aimTargetRef.r + 9) * s;
+      const rcx = aimTargetRef.x;
+      const rcy = aimTargetRef.y - aimTargetRef.r * 1.1;
+      ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 4; i++) {
+        const a = i * Math.PI / 2 + time * 0.8;
+        ctx.beginPath();
+        ctx.moveTo(rcx + Math.cos(a) * (rr2 + 3), rcy + Math.sin(a) * (rr2 + 3));
+        ctx.lineTo(rcx + Math.cos(a) * (rr2 + 10), rcy + Math.sin(a) * (rr2 + 10));
+        ctx.stroke();
+      }
+      if (hitMarker > 0) {
+        const hm = hitMarker / 0.15;
+        ctx.strokeStyle = 'rgba(255,220,120,' + hm.toFixed(3) + ')';
+        ctx.lineWidth = 3;
+        for (let i = 0; i < 4; i++) {
+          const a = i * Math.PI / 2 + Math.PI / 4;
+          ctx.beginPath();
+          ctx.moveTo(rcx + Math.cos(a) * rr2 * 0.55, rcy + Math.sin(a) * rr2 * 0.55);
+          ctx.lineTo(rcx + Math.cos(a) * rr2 * (0.9 + 0.25 * hm), rcy + Math.sin(a) * rr2 * (0.9 + 0.25 * hm));
+          ctx.stroke();
+        }
+      }
+    }
 
     // bullets
     for (const b of bullets) {
