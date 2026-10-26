@@ -1214,8 +1214,12 @@
     if (muzzle > 0) {
       const mmx = player.x + Math.cos(player.aim) * (player.r + 18);
       const mmy = gy + Math.sin(player.aim) * (player.r + 18);
-      ctx.fillStyle = 'rgba(255,226,140,' + (muzzle * 16).toFixed(3) + ')';
-      ctx.beginPath(); ctx.arc(mmx, mmy, 5, 0, TAU); ctx.fill();
+      if (ASSETS.flash && ASSETS.flash.img && ASSETS.flash.img.tagName === 'IMG') {
+        ctx.drawImage(ASSETS.flash.img, mmx - 20 * s, mmy - 20 * s, 40 * s, 40 * s);
+      } else {
+        ctx.fillStyle = 'rgba(255,226,140,' + (muzzle * 16).toFixed(3) + ')';
+        ctx.beginPath(); ctx.arc(mmx, mmy, 5, 0, TAU); ctx.fill();
+      }
     }
     // reload progress ring around the player
     if (player.reloading > 0) {
@@ -1297,11 +1301,21 @@
     ctx.fillStyle = dg;
     ctx.fillRect(0, 0, WORLD, WORLD);
 
-    // blood stains soak into the ground (high contrast: dark slate vs red)
-    ctx.fillStyle = stainColor();
+    // blood stains soak into the ground (AI decal sprite when loaded)
     for (const s of stains) {
-      for (const b of s.blobs) {
-        ctx.beginPath(); ctx.ellipse(s.x + b.x, s.y + b.y, b.r, b.r * 0.6, b.a, 0, TAU); ctx.fill();
+      if (ASSETS.blood && ASSETS.blood.img && ASSETS.blood.img.tagName === 'IMG') {
+        ctx.save();
+        ctx.globalAlpha = 0.85;
+        ctx.translate(s.x, s.y);
+        ctx.rotate(s.blobs[0].a);
+        const r = Math.max(10, s.blobs[0].r * 3.2);
+        ctx.drawImage(ASSETS.blood.img, -r, -r, r * 2, r * 2);
+        ctx.restore();
+      } else {
+        ctx.fillStyle = stainColor();
+        for (const b of s.blobs) {
+          ctx.beginPath(); ctx.ellipse(s.x + b.x, s.y + b.y, b.r, b.r * 0.6, b.a, 0, TAU); ctx.fill();
+        }
       }
     }
 

@@ -237,4 +237,35 @@
   }
 
   window.ZWAssets = sprites;
+
+  // ---- AI-generated image sprites (Gemini 3 Pro Image, keyed + cropped) ----
+  // Loaded async; on success they replace the procedural canvases. On failure
+  // the procedural sprites stay as fallback.
+  const IMAGE_SPRITES = [
+    { key: 'player', file: 'sprites/player.png', w: 30, h: 38, set: true },
+    { key: 'zombie', file: 'sprites/zombie.png', w: 30, h: 36, set: true },
+    { key: 'fast', file: 'sprites/fast.png', w: 26, h: 30, set: true },
+    { key: 'brute', file: 'sprites/brute.png', w: 44, h: 50, set: true },
+    { key: 'boss', file: 'sprites/boss.png', w: 64, h: 72, set: true },
+    { key: 'gem', file: 'sprites/gem.png', w: 12, h: 16 },
+    { key: 'heal', file: 'sprites/heal.png', w: 20, h: 16 },
+    { key: 'pickShotgun', file: 'sprites/pickShotgun.png', w: 26, h: 12 },
+    { key: 'pickRifle', file: 'sprites/pickRifle.png', w: 26, h: 12 },
+    { key: 'flash', file: 'sprites/flash.png', w: 40, h: 40 },
+  ];
+  for (const cfg of IMAGE_SPRITES) {
+    const img = new Image();
+    img.onload = () => {
+      const spr = { img, w: cfg.w, h: cfg.h };
+      if (cfg.set) {
+        for (let d = 0; d < sprites[cfg.key].length; d++)
+          for (let fr = 0; fr < sprites[cfg.key][d].length; fr++)
+            sprites[cfg.key][d][fr] = spr;
+      } else {
+        sprites[cfg.key] = spr;
+      }
+    };
+    img.onerror = () => { /* keep procedural sprite as fallback */ };
+    img.src = cfg.file;
+  }
 })();
