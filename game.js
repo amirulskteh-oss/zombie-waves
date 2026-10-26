@@ -799,7 +799,7 @@
           shake = Math.min(shake + (z.type === 'boss' ? 2.5 : 1.5), 14);
           blood(b.x, b.y, 4, Math.atan2(b.vy, b.vx), 0.7);
           parts.push({ kind: 'flash', x: b.x, y: b.y, vx: 0, vy: 0, life: 0.12, max: 0.12, size: 7, c: '#fff2c0' });
-          floats.push({ x: z.x, y: z.y - z.r - 6, t: 0.7, txt: String(Math.round(b.dmg)) });
+          floats.push({ x: z.x + rand(-7, 7), y: z.y - z.r - 6, t: 0.75, max: 0.75, txt: String(Math.round(b.dmg)), kill: z.hp <= 0 });
           sfx.hit();
           if (z.hp <= 0) killZombie(z);
           if (b.hit && b.pierce > 0) { b.pierce--; continue; }
@@ -833,11 +833,11 @@
         drops.splice(i, 1);
         if (d.type === 'weapon') {
           player.weapon = d.weapon;
-          floats.push({ x: d.x, y: d.y - 16, t: 1, txt: WEAPONS[d.weapon].name + '!' });
+          floats.push({ x: d.x, y: d.y - 16, t: 1, max: 1, txt: WEAPONS[d.weapon].name + '!', kill: false });
           sfx.level();
         } else {
           player.hp = Math.min(player.maxHp, player.hp + 25);
-          floats.push({ x: d.x, y: d.y - 14, t: 0.7, txt: '+25' });
+          floats.push({ x: d.x, y: d.y - 14, t: 0.7, max: 0.7, txt: '+25', kill: false });
           sfx.heal();
         }
       }
@@ -1125,12 +1125,18 @@
     }
     ctx.globalAlpha = 1;
 
-    // damage numbers
+    // floating numbers (pop-in scale, gold oversized killing blows)
     for (const f of floats) {
-      ctx.globalAlpha = clamp(f.t / 0.7, 0, 1);
-      ctx.font = 'bold 13px "Segoe UI", system-ui, sans-serif';
+      const m = f.max || 0.7;
+      const age = 1 - clamp(f.t / m, 0, 1);
+      const scale = age < 0.18 ? 1.6 - (age / 0.18) * 0.6 : 1;
+      ctx.globalAlpha = clamp((f.t / m) * 1.5, 0, 1);
+      ctx.font = 'bold ' + Math.round((f.kill ? 18 : 13) * scale) + 'px "Segoe UI", system-ui, sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillStyle = '#ffd966';
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+      ctx.strokeText(f.txt, f.x, f.y);
+      ctx.fillStyle = f.kill ? '#ffd966' : '#ffffff';
       ctx.fillText(f.txt, f.x, f.y);
     }
     ctx.globalAlpha = 1;
