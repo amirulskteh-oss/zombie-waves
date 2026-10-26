@@ -74,6 +74,7 @@
     level: () => { [440, 554, 659, 880].forEach((f, i) => tone(f, f, 0.12, 'triangle', 0.05, i * 0.08)); },
     roar: () => tone(90, 40, 0.5, 'sawtooth', 0.09),
     charge: () => tone(220, 90, 0.22, 'square', 0.05),
+    swing: () => tone(330, 140, 0.08, 'sine', 0.03),
     shotgun: () => tone(140, 55, 0.13, 'square', 0.055),
     rifle: () => tone(520, 80, 0.1, 'sawtooth', 0.05),
   };
@@ -380,7 +381,7 @@
     else if (roll < bruteP + 0.35) { base.hp *= 0.55; base.speed *= 1.75; base.dmg = 6; base.r = 11; base.color = '#8a9a4f'; base.edge = '#5c692f'; type = 'fast'; }
     zombies.push({
       x, y, r: base.r, hp: base.hp, maxHp: base.hp, speed: base.speed, dmg: base.dmg,
-      color: base.color, edge: base.edge, face: 0, wob: rand(0, 6), flash: 0, atkCd: 0, dead: false,
+      color: base.color, edge: base.edge, face: 0, wob: rand(0, 6), flash: 0, atkCd: 0, atkAnim: 0, lungeX: 0, lungeY: 0, dead: false,
       sprite: type === 'brute' ? 'brute' : type === 'fast' ? 'fast' : 'zombie',
       anim: rand(0, 36),
     });
@@ -396,7 +397,7 @@
       x, y, r: 40, hp, maxHp: hp,
       speed: 28 + Math.min(wave, 30), dmg: 25,
       color: '#6b3f3f', edge: '#3c2020',
-      face: 0, wob: rand(0, 6), flash: 0, atkCd: 0, dead: false,
+      face: 0, wob: rand(0, 6), flash: 0, atkCd: 0, atkAnim: 0, lungeX: 0, lungeY: 0, dead: false,
       type: 'boss', sprite: 'boss', anim: rand(0, 36), ai: { t: rand(3, 4), phase: 'walk', chx: 0, chy: 0 },
     };
     pushOutOfObstacles(bossRef, 40);
@@ -705,20 +706,36 @@
       pushOutOfObstacles(z, z.r);
       if (z.flash > 0) z.flash -= dt;
       if (z.atkCd > 0) z.atkCd -= dt;
-      const rr = z.r + player.r - 3;
-      if (z.atkCd <= 0 && player.hitCd <= 0 && dist2(z.x, z.y, player.x, player.y) < rr * rr) {
+      if (z.atkAnim > 0) {
+        z.atkAnim -= dt;
+        z.x = clamp(z.x + z.lungeX * dt, 24, WORLD - 24);
+        z.y = clamp(z.y + z.lungeY * dt, 24, WORLD - 24);
+        z.lungeX *= Math.max(0, 1 - 6 * dt);
+        z.lungeY *= Math.max(0, 1 - 6 * dt);
+      }
+      // attack trigger: swing + lunge when in range, damage on contact
+      const attackRange = z.r + player.r + 12;
+      const dP2 = dist2(z.x, z.y, player.x, player.y);
+      if (z.atkCd <= 0 && dP2 < attackRange * attackRange) {
         z.atkCd = 0.9;
-        player.hp -= z.dmg;
-        player.hitCd = 0.55;
-        hurtFlash = 0.5;
-        shake = Math.min(shake + 7, 14);
-        sfx.hurt();
-        blood(z.x, z.y, 4);
-        const kb = Math.atan2(player.y - z.y, player.x - z.x);
-        const kf = z.type === 'boss' ? 30 : 18;
-        player.x = clamp(player.x + Math.cos(kb) * kf, 24, WORLD - 24);
-        player.y = clamp(player.y + Math.sin(kb) * kf, 24, WORLD - 24);
-        if (player.hp <= 0) { player.hp = 0; gameOver(); return; }
+        z.atkAnim = 0.32;
+        const a = Math.atan2(player.y - z.y, player.x - z.x);
+        z.lungeX = Math.cos(a) * 110;
+        z.lungeY = Math.sin(a) * 110;
+        sfx.swing();
+        if (player.hitCd <= 0 && dP2 < (z.r + player.r + 2) * (z.r + player.r + 2)) {
+          player.hp -= z.dmg;
+          player.hitCd = 0.55;
+          hurtFlash = 0.5;
+          shake = Math.min(shake + 7, 14);
+          sfx.hurt();
+          blood(z.x, z.y, 4);
+          const kb = Math.atan2(player.y - z.y, player.x - z.x);
+          const kf = z.type === 'boss' ? 30 : 18;
+          player.x = clamp(player.x + Math.cos(kb) * kf, 24, WORLD - 24);
+          player.y = clamp(player.y + Math.sin(kb) * kf, 24, WORLD - 24);
+          if (player.hp <= 0) { player.hp = 0; gameOver(); return; }
+        }
       }
     }
 
@@ -899,8 +916,18 @@
       ctx.setLineDash([]);
     }
     drawShadow(z.x, feetY + 2, z.r * 1.05 * s, 0.3);
-    drawSpriteAt(sp, z.x, feetY + 2, s, false, Math.sin(z.wob * 5) * 0.06);
+    const lungeP = z.atkAnim > 0 ? 1 - z.atkAnim / 0.32 : 0;
+    const lungeScale = 1 + (z.atkAnim > 0 ? Math.sin(lungeP * Math.PI) * 0.14 : 0);
+    drawSpriteAt(sp, z.x, feetY + 2, s * lungeScale, false, Math.sin(z.wob * 5) * 0.06 + (z.atkAnim > 0 ? Math.sin(lungeP * Math.PI) * 0.18 : 0));
     const cy = feetY + 2 - (sp.h * s) / 2;
+    if (z.atkAnim > 0) {
+      // swipe arc sweeping across the facing direction
+      ctx.strokeStyle = 'rgba(255,240,200,' + (1 - lungeP).toFixed(3) + ')';
+      ctx.lineWidth = 3 * s;
+      ctx.beginPath();
+      ctx.arc(z.x, cy, (z.r + 12) * s, z.face - 0.9 + lungeP * 1.5, z.face - 0.15 + lungeP * 1.5);
+      ctx.stroke();
+    }
     if (z.flash > 0) {
       ctx.fillStyle = 'rgba(255,255,255,' + (z.flash * 8).toFixed(3) + ')';
       ctx.beginPath(); ctx.arc(z.x, cy, z.r * s, 0, TAU); ctx.fill();
