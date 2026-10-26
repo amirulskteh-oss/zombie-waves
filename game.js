@@ -436,10 +436,12 @@
       score += 10;
       blood(z.x, z.y, 12);
       shake = Math.min(shake + 3, 14);
-      hitstop = Math.max(hitstop, 0.045);
-      killFlash = Math.max(killFlash, 0.5);
+      hitstop = Math.max(hitstop, z.type === 'brute' ? 0.08 : 0.045);
+      if (z.type === 'brute') {
+        killFlash = Math.max(killFlash, 0.5);
+        slowmo = Math.max(slowmo, 0.35);
+      }
       zoomPunch = Math.min(zoomPunch + 0.035, 0.15);
-      slowmo = Math.max(slowmo, 0.4);
       for (let i = 0; i < 4; i++) parts.push({ kind: 'gib', x: z.x, y: z.y, vx: rand(-160, 160), vy: rand(-160, 160), life: rand(0.4, 0.8), max: 0.8, size: rand(3.5, 6), c: pick(['#7a0f1a', '#5c0c14']), fr: 3, rot: rand(0, TAU), vr: rand(-8, 8), stain: true });
       addStain(z.x, z.y, rand(10, 17));
       gems.push({ x: z.x + rand(-8, 8), y: z.y + rand(-8, 8), vx: rand(-60, 60), vy: rand(-60, 60) });
