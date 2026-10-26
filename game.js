@@ -92,6 +92,7 @@
   let slowmo = 0;
   let hitMarker = 0, aimTargetRef = null;
   let combo = 0, comboTimer = 0, comboPulse = 0;
+  let comboVisible = loadPref('zombie-waves.combo', true);
   const COMBO_WINDOW = 3;
   const comboMult = () => 1 + Math.min(3, Math.floor(combo / 5)); // ×1 → ×4
   const xpNeed = () => 5 + level * 3;
@@ -181,6 +182,11 @@
     savePref('zombie-waves.hints', hintsOn);
     updateSettingsRows();
   }
+  function toggleComboHud() {
+    comboVisible = !comboVisible;
+    savePref('zombie-waves.combo', comboVisible);
+    updateSettingsRows();
+  }
   function toggleShake() {
     shakeLevel = shakeLevel > 0 ? 0 : 100;
     savePref('zombie-waves.shakelevel', shakeLevel > 0);
@@ -191,8 +197,10 @@
     hintsOn = true;
     shakeLevel = 100;
     volume = 100;
+    comboVisible = true;
     clearPref('zombie-waves.muted');
     clearPref('zombie-waves.hints');
+    clearPref('zombie-waves.combo');
     clearPref('zombie-waves.shakelevel');
     clearPref('zombie-waves.shake');
     clearPref('zombie-waves.volume');
@@ -207,6 +215,7 @@
     { nm: 'Sound', ds: 'Toggle all audio', get: () => muted, on: '🔊 On', off: '🔇 Off', toggle: toggleMute },
     { nm: 'Master Volume', ds: 'Overall loudness', slider: true, get: () => volume, set: setVolume },
     { nm: 'Key Hints', ds: 'Show key hints on menus', get: () => hintsOn, on: '👁 On', off: '👁 Off', toggle: toggleHints },
+    { nm: 'Combo Counter', ds: 'Show kill combo and multiplier in the HUD', get: () => comboVisible, on: '🔗 On', off: '🔗 Off', toggle: toggleComboHud },
     { nm: 'Screen Shake', ds: 'Camera motion intensity on hits and dashes', slider: true, get: () => shakeLevel, set: setShake },
   ];
   function setVolume(v) {
@@ -1294,7 +1303,7 @@
     }
 
     // kill combo counter with score multiplier
-    if (combo >= 2 && comboTimer > 0 && (state === 'playing' || state === 'over')) {
+    if (comboVisible && combo >= 2 && comboTimer > 0 && (state === 'playing' || state === 'over')) {
       const m = comboMult();
       const pulse = 1 + comboPulse * 0.22;
       ctx.save();
