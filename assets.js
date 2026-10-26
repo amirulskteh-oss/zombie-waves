@@ -243,7 +243,7 @@
   // the procedural sprites stay as fallback.
   const IMAGE_SPRITES = [
     { key: 'player', w: 30, h: 38, set: true, perDir: { 0: 'sprites/player_E.png', 1: 'sprites/player_SE.png', 2: 'sprites/player.png', 3: 'sprites/player_SW.png', 4: 'sprites/player_W.png', 5: 'sprites/player_NW.png', 6: 'sprites/player_N.png', 7: 'sprites/player_NE.png' } },
-    { key: 'zombie', file: 'sprites/zombie.png', w: 30, h: 36, set: true },
+    { key: 'zombie', w: 30, h: 36, set: true, perDir: { 0: 'sprites/zombie_E.png', 1: 'sprites/zombie_SE.png', 2: 'sprites/zombie.png', 3: 'sprites/zombie_SW.png', 4: 'sprites/zombie_W.png', 5: 'sprites/zombie_NW.png', 6: 'sprites/zombie_N.png', 7: 'sprites/zombie_NE.png' } },
     { key: 'fast', file: 'sprites/fast.png', w: 26, h: 30, set: true },
     { key: 'brute', file: 'sprites/brute.png', w: 44, h: 50, set: true },
     { key: 'boss', file: 'sprites/boss.png', w: 64, h: 72, set: true },
