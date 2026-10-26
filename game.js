@@ -269,8 +269,12 @@
   function setHudScale(v) {
     hudScale = clamp(Math.round(v), 50, 200);
     try { localStorage.setItem('zombie-waves.hudscale', String(hudScale)); } catch (e) { /* storage unavailable */ }
+    applyUiScale();
   }
   const hudFont = (px) => Math.round(px * hudScale / 100);
+  function applyUiScale() {
+    try { document.documentElement.style.setProperty('--uis', String(hudScale / 100)); } catch (e) { /* no documentElement */ }
+  }
   function toggleShake() {
     shakeLevel = shakeLevel > 0 ? 0 : 100;
     savePref('zombie-waves.shakelevel', shakeLevel > 0);
@@ -298,6 +302,7 @@
     clearPref('zombie-waves.reducedflash');
     clearPref('zombie-waves.highcontrast');
     clearPref('zombie-waves.hudscale');
+    applyUiScale();
     btnMute.textContent = '🔊';
     applyAudioVolumes();
     showHints();
@@ -1501,6 +1506,7 @@
   elDash.addEventListener('touchstart', (e) => { e.preventDefault(); tryDash(); });
   elDash.addEventListener('mousedown', (e) => { e.preventDefault(); tryDash(); });
   $('hiscore').textContent = highScore > 0 ? 'High Score: ' + highScore : '';
+  applyUiScale();
   btnMute.textContent = muted ? '🔇' : '🔊';
   if (hintsOn) showHints(); else hideHints();
 })();
