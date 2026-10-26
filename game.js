@@ -106,7 +106,7 @@
   const player = {
     x: WORLD / 2, y: WORLD / 2, r: 15,
     hp: 100, maxHp: 100, speed: 235,
-    dmgMul: 1, rateMul: 1, weapon: 'pistol', fireCd: 0, aim: -Math.PI / 2,
+    dmgMul: 1, rateMul: 1, weapon: 'pistol', fireCd: 0, aim: -Math.PI / 2, facing: Math.PI / 2,
     regen: 0, dashCdMax: 2.4, magnet: 130,
     dashT: 0, dashCd: 0, hitCd: 0,
   };
@@ -338,7 +338,7 @@
     wave = 0; kills = 0; level = 1; xp = 0; time = 0; score = 0; bossRef = null;
     Object.assign(player, {
       x: WORLD / 2, y: WORLD / 2, hp: 100, maxHp: 100, speed: 235,
-      dmgMul: 1, rateMul: 1, weapon: 'pistol', fireCd: 0, aim: -Math.PI / 2,
+      dmgMul: 1, rateMul: 1, weapon: 'pistol', fireCd: 0, aim: -Math.PI / 2, facing: Math.PI / 2,
       regen: 0, dashCdMax: 2.4, magnet: 130, dashT: 0, dashCd: 0, hitCd: 0,
     });
     waveActive = false; interTimer = 2.5;
@@ -591,11 +591,12 @@
     if (joy.active) { mx += joy.dx / 60; my += joy.dy / 60; }
     const ml = Math.hypot(mx, my);
     if (ml > 1) { mx /= ml; my /= ml; }
+    if (ml > 0.1) player.facing = Math.atan2(my, mx); // body faces movement; gun keeps its own aim
     let spd = player.speed;
     if (player.dashT > 0) {
       spd *= 2.8;
       player.dashT -= dt;
-      ghosts.push({ x: player.x, y: player.y, life: 0.28, max: 0.28 });
+      ghosts.push({ x: player.x, y: player.y, life: 0.28, max: 0.28, dir: dirIndex(player.facing) });
       if (ghosts.length > 60) ghosts.shift();
       const tvx = (mx || my) ? mx : Math.cos(player.aim);
       const tvy = (mx || my) ? my : Math.sin(player.aim);
@@ -825,6 +826,9 @@
   function depthScale(y) {
     return 0.78 + 0.52 * (y / WORLD); // farther (top) smaller, nearer (bottom) larger
   }
+  function dirIndex(a) {
+    return ((Math.round(a / (Math.PI / 4)) % 8) + 8) % 8; // 0=E, 1=SE, 2=S ... 7=NE
+  }
   function drawShadow(x, y, w, alpha) {
     ctx.fillStyle = 'rgba(0,0,0,' + alpha + ')';
     ctx.beginPath();
@@ -866,13 +870,13 @@
   function drawGhost(gh) {
     const s = depthScale(gh.y);
     ctx.globalAlpha = clamp(gh.life / gh.max, 0, 1) * 0.3;
-    drawSpriteAt(ASSETS.player, gh.x, gh.y + 4, s, false, 0);
+    drawSpriteAt(ASSETS.player[gh.dir || 2], gh.x, gh.y + 4, s, false, 0);
     ctx.globalAlpha = 1;
   }
   function drawZombie(z) {
     const s = depthScale(z.y);
-    const sp = ASSETS[z.sprite] || ASSETS.zombie;
-    const flip = Math.cos(z.face) < 0 ? -1 : 1;
+    const set = ASSETS[z.sprite] || ASSETS.zombie;
+    const sp = set[dirIndex(z.face)];
     const feetY = z.y + z.r * 0.5;
     if (z.type === 'boss' && z.ai.phase === 'windup') {
       const ta = z.face;
@@ -886,7 +890,7 @@
       ctx.setLineDash([]);
     }
     drawShadow(z.x, feetY + 2, z.r * 1.05 * s, 0.3);
-    drawSpriteAt(sp, z.x, feetY + 2, s, flip, Math.sin(z.wob * 5) * 0.06);
+    drawSpriteAt(sp, z.x, feetY + 2, s, false, Math.sin(z.wob * 5) * 0.06);
     const cy = feetY + 2 - (sp.h * s) / 2;
     if (z.flash > 0) {
       ctx.fillStyle = 'rgba(255,255,255,' + (z.flash * 8).toFixed(3) + ')';
@@ -913,7 +917,7 @@
       ctx.fillStyle = 'rgba(140,225,255,0.22)';
       ctx.beginPath(); ctx.arc(player.x, feetY, player.r + 8, 0, TAU); ctx.fill();
     }
-    const sp = ASSETS.player;
+    const sp = ASSETS.player[dirIndex(player.facing)];
     drawSpriteAt(sp, player.x, feetY + 2, s, false, 0);
     // gun rotates toward aim, held at chest height
     const gy = feetY + 2 - sp.h * s * 0.5;

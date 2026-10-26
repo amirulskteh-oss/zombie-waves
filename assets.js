@@ -1,5 +1,6 @@
 'use strict';
 // Procedural 2.5D sprite assets, pre-rendered once to offscreen canvases.
+// Humanoid entities come as 8-directional sets (E, SE, S, SW, W, NW, N, NE).
 // Loaded before game.js; exposed as window.ZWAssets.
 (function () {
   const TAU = Math.PI * 2;
@@ -25,85 +26,121 @@
     g.closePath();
   }
 
-  // Standing figure viewed from a 3/4 angle: feet at the bottom, arms reaching
-  // toward the viewer, side-shaded torso, rim-lit head.
-  function humanoid(g, w, h, o) {
+  // Standing figure viewed from a 3/4 camera, drawn facing angle `a`
+  // (0 = East, PI/2 = South/toward viewer, PI = West, 3PI/2 = North/away).
+  function humanoid(g, w, h, o, a) {
+    const dx = Math.cos(a);
+    const dy = Math.sin(a);
     const cx = w / 2;
+    const bw = o.bodyW * (1 - 0.32 * Math.abs(dx)); // side profile is narrower
     const ty = h - o.legH - o.bodyH; // torso top
-    // legs
+    const back = dy < -0.2; // facing away from the viewer
+
+    // legs (slight stride toward facing)
     g.fillStyle = o.legs;
-    rr(g, cx - o.bodyW * 0.34, h - o.legH, o.bodyW * 0.28, o.legH, 2); g.fill();
-    rr(g, cx + o.bodyW * 0.06, h - o.legH, o.bodyW * 0.28, o.legH, 2); g.fill();
-    // arms reaching forward
-    g.fillStyle = o.dark;
-    rr(g, cx - o.bodyW * 0.5 - o.armW * 0.35, ty + o.bodyH * 0.12, o.armW, o.bodyH * 0.7, o.armW * 0.45); g.fill();
-    rr(g, cx + o.bodyW * 0.5 - o.armW * 0.65, ty + o.bodyH * 0.12, o.armW, o.bodyH * 0.7, o.armW * 0.45); g.fill();
+    rr(g, cx - bw * 0.36 + dx * 1.5, h - o.legH, bw * 0.3, o.legH, 2); g.fill();
+    rr(g, cx + bw * 0.06 + dx * 1.5, h - o.legH, bw * 0.3, o.legH, 2); g.fill();
+
+    // arms — behind the torso when facing away, in front otherwise
+    const armW = o.armW * (1 - 0.25 * Math.abs(dx));
+    const armY = ty + o.bodyH * 0.1 + Math.max(dy, 0) * o.bodyH * 0.35 - (back ? 2 : 0);
+    const armDX = dx * o.armW * 1.1;
+    const armDY = Math.max(dy, -0.2) * o.armW * 0.55;
+    const drawArms = () => {
+      g.fillStyle = o.dark;
+      rr(g, cx - bw / 2 + armDX - armW / 2, armY + armDY, armW, o.bodyH * 0.7, armW * 0.45); g.fill();
+      rr(g, cx + bw / 2 - armDX - armW / 2, armY + armDY, armW, o.bodyH * 0.7, armW * 0.45); g.fill();
+    };
+    if (back) drawArms();
+
     // torso with side shading
-    const grad = g.createLinearGradient(cx - o.bodyW / 2, 0, cx + o.bodyW / 2, 0);
+    const grad = g.createLinearGradient(cx - bw / 2, 0, cx + bw / 2, 0);
     grad.addColorStop(0, o.dark);
     grad.addColorStop(0.55, o.base);
     grad.addColorStop(1, o.light);
     g.fillStyle = grad;
-    rr(g, cx - o.bodyW / 2, ty, o.bodyW, o.bodyH, o.bodyW * 0.3); g.fill();
+    rr(g, cx - bw / 2, ty, bw, o.bodyH, bw * 0.3); g.fill();
+
+    if (!back) drawArms();
+
     // head
+    const hx = cx + dx * o.headR * 0.25;
+    const hy = ty - o.headR * 0.5;
     g.fillStyle = o.skin;
-    g.beginPath(); g.arc(cx, ty - o.headR * 0.5, o.headR, 0, TAU); g.fill();
+    g.beginPath(); g.arc(hx, hy, o.headR, 0, TAU); g.fill();
     g.strokeStyle = 'rgba(255,255,255,0.16)'; g.lineWidth = 1;
-    g.beginPath(); g.arc(cx, ty - o.headR * 0.5, o.headR, -0.7, 0.8); g.stroke();
-    if (o.eyes) {
-      g.fillStyle = o.eyes;
-      const ey = ty - o.headR * 0.55;
-      g.beginPath(); g.arc(cx - o.headR * 0.35, ey, o.headR * 0.16, 0, TAU); g.fill();
-      g.beginPath(); g.arc(cx + o.headR * 0.35, ey, o.headR * 0.16, 0, TAU); g.fill();
+    g.beginPath(); g.arc(hx, hy, o.headR, -0.7, 0.8); g.stroke();
+
+    if (back) {
+      // back of the head
+      g.fillStyle = o.dark;
+      g.beginPath(); g.arc(hx, hy, o.headR * 0.78, 0, TAU); g.fill();
+      if (o.cap) {
+        g.fillStyle = '#1a2530';
+        g.beginPath(); g.arc(hx, hy, o.headR * 0.8, 0, TAU); g.fill();
+      }
+    } else {
+      // face
+      g.fillStyle = o.eyes || '#222';
+      const ex = dx * o.headR * 0.3;
+      const ey = hy - o.headR * 0.1 + dy * o.headR * 0.12;
+      g.beginPath(); g.arc(hx - o.headR * 0.35 + ex, ey, o.headR * 0.16, 0, TAU); g.fill();
+      g.beginPath(); g.arc(hx + o.headR * 0.35 + ex, ey, o.headR * 0.16, 0, TAU); g.fill();
+      if (o.cap) {
+        g.fillStyle = '#22303f';
+        g.beginPath(); g.arc(hx, hy - o.headR * 0.25, o.headR * 0.92, Math.PI, 0); g.fill();
+        g.fillRect(hx - o.headR * 0.92 + dx * 2, hy - o.headR * 0.32, o.headR * 1.84, 2);
+      }
     }
+  }
+
+  // Build 8 directional variants; `extra(g, w, h, a)` draws per-direction extras.
+  function buildSet(w, h, opts, extra) {
+    const set = [];
+    for (let i = 0; i < 8; i++) {
+      const a = i * (Math.PI / 4);
+      set.push(make(w, h, (g) => {
+        humanoid(g, w, h, opts, a);
+        if (extra) extra(g, w, h, a);
+      }));
+    }
+    return set;
   }
 
   const sprites = {};
 
-  sprites.zombie = make(30, 36, (g, w, h) => {
-    humanoid(g, w, h, { legH: 10, bodyH: 14, bodyW: 16, headR: 6.5, armW: 5,
-      base: '#5f7d3f', dark: '#3f5428', light: '#79955a', legs: '#3f5428', skin: '#9fb86a', eyes: '#2a3320' });
-    g.strokeStyle = 'rgba(0,0,0,0.25)'; g.lineWidth = 1;
-    g.beginPath(); g.moveTo(w * 0.35, h * 0.5); g.lineTo(w * 0.5, h * 0.58); g.lineTo(w * 0.42, h * 0.66); g.stroke();
-  });
+  sprites.zombie = buildSet(30, 36, { legH: 10, bodyH: 14, bodyW: 16, headR: 6.5, armW: 5,
+    base: '#5f7d3f', dark: '#3f5428', light: '#79955a', legs: '#3f5428', skin: '#9fb86a', eyes: '#2a3320' },
+    (g, w, h) => {
+      g.strokeStyle = 'rgba(0,0,0,0.25)'; g.lineWidth = 1;
+      g.beginPath(); g.moveTo(w * 0.35, h * 0.5); g.lineTo(w * 0.5, h * 0.58); g.lineTo(w * 0.42, h * 0.66); g.stroke();
+    });
 
-  sprites.fast = make(26, 30, (g, w, h) => {
-    humanoid(g, w, h, { legH: 9, bodyH: 11, bodyW: 13, headR: 5.5, armW: 4,
-      base: '#8a9a4f', dark: '#5c692f', light: '#a8b96b', legs: '#5c692f', skin: '#c2cf7f', eyes: '#3a3d1c' });
-  });
+  sprites.fast = buildSet(26, 30, { legH: 9, bodyH: 11, bodyW: 13, headR: 5.5, armW: 4,
+    base: '#8a9a4f', dark: '#5c692f', light: '#a8b96b', legs: '#5c692f', skin: '#c2cf7f', eyes: '#3a3d1c' });
 
-  sprites.brute = make(44, 50, (g, w, h) => {
-    humanoid(g, w, h, { legH: 14, bodyH: 20, bodyW: 26, headR: 8, armW: 9,
-      base: '#4f6b36', dark: '#33451f', light: '#6d8a4c', legs: '#33451f', skin: '#7d955c', eyes: '#22301a' });
-  });
+  sprites.brute = buildSet(44, 50, { legH: 14, bodyH: 20, bodyW: 26, headR: 8, armW: 9,
+    base: '#4f6b36', dark: '#33451f', light: '#6d8a4c', legs: '#33451f', skin: '#7d955c', eyes: '#22301a' });
 
-  sprites.boss = make(64, 72, (g, w, h) => {
-    humanoid(g, w, h, { legH: 20, bodyH: 28, bodyW: 38, headR: 11, armW: 13,
-      base: '#6b3f3f', dark: '#3c2020', light: '#8a5656', legs: '#3c2020', skin: '#8a5656', eyes: '#ff5c5c' });
-    // shoulder spikes
-    const cx = w / 2, ty = h - 20 - 28;
-    g.fillStyle = '#3c2020';
-    for (const side of [-1, 1]) {
-      g.beginPath();
-      g.moveTo(cx + side * 14, ty + 2);
-      g.lineTo(cx + side * 25, ty - 9);
-      g.lineTo(cx + side * 19, ty + 7);
-      g.closePath(); g.fill();
-    }
-    // glowing eye haze
-    g.fillStyle = 'rgba(255,80,80,0.4)';
-    g.beginPath(); g.arc(cx, ty - 6, 5, 0, TAU); g.fill();
-  });
+  sprites.boss = buildSet(64, 72, { legH: 20, bodyH: 28, bodyW: 38, headR: 11, armW: 13,
+    base: '#6b3f3f', dark: '#3c2020', light: '#8a5656', legs: '#3c2020', skin: '#8a5656', eyes: '#ff5c5c' },
+    (g, w, h, a) => {
+      const dx = Math.cos(a), dy = Math.sin(a);
+      const cx = w / 2, ty = h - 20 - 28;
+      g.fillStyle = '#3c2020';
+      for (const side of [-1, 1]) {
+        g.beginPath();
+        g.moveTo(cx + side * 14 + dx * 3, ty + 2);
+        g.lineTo(cx + side * 25 + dx * 4, ty - 9);
+        g.lineTo(cx + side * 19 + dx * 3, ty + 7);
+        g.closePath(); g.fill();
+      }
+      g.fillStyle = 'rgba(255,80,80,0.4)';
+      g.beginPath(); g.arc(cx + dx * 3, ty - 6, 5, 0, TAU); g.fill();
+    });
 
-  sprites.player = make(30, 38, (g, w, h) => {
-    humanoid(g, w, h, { legH: 11, bodyH: 15, bodyW: 16, headR: 6.5, armW: 5,
-      base: '#3d5168', dark: '#22303f', light: '#5a7392', legs: '#22303f', skin: '#d9a066' });
-    // cap
-    const cx = w / 2, hy = h - 11 - 15 - 6.5 * 0.5;
-    g.fillStyle = '#22303f';
-    g.beginPath(); g.arc(cx, hy, 6.5, Math.PI, 0); g.fill();
-    g.fillRect(cx - 6.5, hy - 1.5, 13, 2);
-  });
+  sprites.player = buildSet(30, 38, { legH: 11, bodyH: 15, bodyW: 16, headR: 6.5, armW: 5,
+    base: '#3d5168', dark: '#22303f', light: '#5a7392', legs: '#22303f', skin: '#d9a066', cap: true });
 
   sprites.rock = make(48, 34, (g, w, h) => {
     const grad = g.createLinearGradient(0, 0, 0, h);
