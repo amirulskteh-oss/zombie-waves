@@ -158,6 +158,7 @@
   let hitMarker = 0, aimTargetRef = null;
   let combo = 0, comboTimer = 0, comboPulse = 0;
   let comboVisible = loadPref('zombie-waves.combo', true);
+  let reducedFlash = loadPref('zombie-waves.reducedflash', false);
   const COMBO_WINDOW = 3;
   const comboMult = () => 1 + Math.min(3, Math.floor(combo / 5)); // ×1 → ×4
   const xpNeed = () => 5 + level * 3;
@@ -252,6 +253,11 @@
     savePref('zombie-waves.combo', comboVisible);
     updateSettingsRows();
   }
+  function toggleReducedFlash() {
+    reducedFlash = !reducedFlash;
+    savePref('zombie-waves.reducedflash', reducedFlash);
+    updateSettingsRows();
+  }
   function toggleShake() {
     shakeLevel = shakeLevel > 0 ? 0 : 100;
     savePref('zombie-waves.shakelevel', shakeLevel > 0);
@@ -265,6 +271,7 @@
     musicVol = 60;
     sfxVol = 100;
     comboVisible = true;
+    reducedFlash = false;
     clearPref('zombie-waves.muted');
     clearPref('zombie-waves.hints');
     clearPref('zombie-waves.combo');
@@ -273,6 +280,7 @@
     clearPref('zombie-waves.volume');
     clearPref('zombie-waves.musicvol');
     clearPref('zombie-waves.sfxvol');
+    clearPref('zombie-waves.reducedflash');
     btnMute.textContent = '🔊';
     applyAudioVolumes();
     showHints();
@@ -288,6 +296,7 @@
     { nm: 'Sound Effects', ds: 'Gunfire, hits, and UI', slider: true, get: () => sfxVol, set: setSfxVol },
     { nm: 'Key Hints', ds: 'Show key hints on menus', get: () => hintsOn, on: '👁 On', off: '👁 Off', toggle: toggleHints },
     { nm: 'Combo Counter', ds: 'Show kill combo and multiplier in the HUD', get: () => comboVisible, on: '🔗 On', off: '🔗 Off', toggle: toggleComboHud },
+    { nm: 'Reduced Flashing', ds: 'Soften screen flashes for light sensitivity', get: () => reducedFlash, on: '🛡 Reduced', off: '⚡ Full', toggle: toggleReducedFlash },
     { nm: 'Screen Shake', ds: 'Camera motion intensity on hits and dashes', slider: true, get: () => shakeLevel, set: setShake },
   ];
   function setVolume(v) {
@@ -1379,8 +1388,8 @@
       ctx.fillText('MEGA ZOMBIE', vw / 2, by - 8);
     }
 
-    // kill flash (screen-space, punches every kill)
-    if (killFlash > 0) {
+    // kill flash (screen-space, punches every kill) — softened by reduced flashing
+    if (killFlash > 0 && !reducedFlash) {
       ctx.fillStyle = 'rgba(255,244,214,' + Math.min(killFlash * 0.35, 0.32).toFixed(3) + ')';
       ctx.fillRect(0, 0, vw, vh);
     }
@@ -1422,7 +1431,7 @@
     elHp.style.width = clamp((player.hp / player.maxHp) * 100, 0, 100) + '%';
     elXpFill.style.width = clamp((xp / xpNeed()) * 100, 0, 100) + '%';
     elStats.textContent = 'Wave ' + wave + '  ·  ' + kills + ' kills  ·  ' + fmt(time) + '  ·  Lv ' + level + '  ·  Score ' + score + '  ·  ' + WEAPONS[player.weapon].name + ' ' + (player.reloading > 0 ? 'RELOADING' : player.mag + '/' + player.magSize);
-    elHurt.style.opacity = String(Math.min(hurtFlash, 1) * 0.6);
+    elHurt.style.opacity = String(Math.min(hurtFlash, 1) * (reducedFlash ? 0.12 : 0.6));
   }
 
   // ---------- loop ----------
