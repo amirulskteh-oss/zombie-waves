@@ -28,18 +28,22 @@
 
   // Standing figure viewed from a 3/4 camera, drawn facing angle `a`
   // (0 = East, PI/2 = South/toward viewer, PI = West, 3PI/2 = North/away).
-  function humanoid(g, w, h, o, a) {
+  // `phase` (0..1) drives the walk cycle: leg stride, body bob, arm swing.
+  function humanoid(g, w, h, o, a, phase) {
     const dx = Math.cos(a);
     const dy = Math.sin(a);
     const cx = w / 2;
     const bw = o.bodyW * (1 - 0.32 * Math.abs(dx)); // side profile is narrower
-    const ty = h - o.legH - o.bodyH; // torso top
+    const stride = Math.sin(phase * TAU) * 3;       // leg stride along facing
+    const bob = Math.abs(Math.cos(phase * TAU)) * 1.5; // body rises mid-step
+    const swing = Math.sin(phase * TAU) * 1.5;      // arm counter-swing
+    const ty = h - o.legH - o.bodyH - bob; // torso top (bob above planted feet)
     const back = dy < -0.2; // facing away from the viewer
 
-    // legs (slight stride toward facing)
+    // legs (stride toward facing)
     g.fillStyle = o.legs;
-    rr(g, cx - bw * 0.36 + dx * 1.5, h - o.legH, bw * 0.3, o.legH, 2); g.fill();
-    rr(g, cx + bw * 0.06 + dx * 1.5, h - o.legH, bw * 0.3, o.legH, 2); g.fill();
+    rr(g, cx - bw * 0.36 + dx * 1.5 + dx * stride, h - o.legH + dy * stride * 0.4, bw * 0.3, o.legH, 2); g.fill();
+    rr(g, cx + bw * 0.06 + dx * 1.5 - dx * stride, h - o.legH - dy * stride * 0.4, bw * 0.3, o.legH, 2); g.fill();
 
     // arms — behind the torso when facing away, in front otherwise
     const armW = o.armW * (1 - 0.25 * Math.abs(dx));
@@ -48,8 +52,8 @@
     const armDY = Math.max(dy, -0.2) * o.armW * 0.55;
     const drawArms = () => {
       g.fillStyle = o.dark;
-      rr(g, cx - bw / 2 + armDX - armW / 2, armY + armDY, armW, o.bodyH * 0.7, armW * 0.45); g.fill();
-      rr(g, cx + bw / 2 - armDX - armW / 2, armY + armDY, armW, o.bodyH * 0.7, armW * 0.45); g.fill();
+      rr(g, cx - bw / 2 + armDX - armW / 2, armY + armDY + swing, armW, o.bodyH * 0.7, armW * 0.45); g.fill();
+      rr(g, cx + bw / 2 - armDX - armW / 2, armY + armDY - swing, armW, o.bodyH * 0.7, armW * 0.45); g.fill();
     };
     if (back) drawArms();
 
@@ -94,15 +98,21 @@
     }
   }
 
-  // Build 8 directional variants; `extra(g, w, h, a)` draws per-direction extras.
+  // Build 8 directional variants × 4 walk frames; `extra(g, w, h, a)` adds per-direction extras.
   function buildSet(w, h, opts, extra) {
+    const FRAMES = 4;
     const set = [];
     for (let i = 0; i < 8; i++) {
       const a = i * (Math.PI / 4);
-      set.push(make(w, h, (g) => {
-        humanoid(g, w, h, opts, a);
-        if (extra) extra(g, w, h, a);
-      }));
+      const dir = [];
+      for (let fr = 0; fr < FRAMES; fr++) {
+        const phase = fr / FRAMES;
+        dir.push(make(w, h, (g) => {
+          humanoid(g, w, h, opts, a, phase);
+          if (extra) extra(g, w, h, a);
+        }));
+      }
+      set.push(dir);
     }
     return set;
   }

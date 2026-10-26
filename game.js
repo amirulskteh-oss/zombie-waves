@@ -107,6 +107,7 @@
     x: WORLD / 2, y: WORLD / 2, r: 15,
     hp: 100, maxHp: 100, speed: 235,
     dmgMul: 1, rateMul: 1, weapon: 'pistol', fireCd: 0, aim: -Math.PI / 2, facing: Math.PI / 2,
+    anim: 0, moving: false,
     regen: 0, dashCdMax: 2.4, magnet: 130,
     dashT: 0, dashCd: 0, hitCd: 0,
   };
@@ -339,6 +340,7 @@
     Object.assign(player, {
       x: WORLD / 2, y: WORLD / 2, hp: 100, maxHp: 100, speed: 235,
       dmgMul: 1, rateMul: 1, weapon: 'pistol', fireCd: 0, aim: -Math.PI / 2, facing: Math.PI / 2,
+      anim: 0, moving: false,
       regen: 0, dashCdMax: 2.4, magnet: 130, dashT: 0, dashCd: 0, hitCd: 0,
     });
     waveActive = false; interTimer = 2.5;
@@ -380,6 +382,7 @@
       x, y, r: base.r, hp: base.hp, maxHp: base.hp, speed: base.speed, dmg: base.dmg,
       color: base.color, edge: base.edge, face: 0, wob: rand(0, 6), flash: 0, atkCd: 0, dead: false,
       sprite: type === 'brute' ? 'brute' : type === 'fast' ? 'fast' : 'zombie',
+      anim: rand(0, 36),
     });
   }
 
@@ -394,7 +397,7 @@
       speed: 28 + Math.min(wave, 30), dmg: 25,
       color: '#6b3f3f', edge: '#3c2020',
       face: 0, wob: rand(0, 6), flash: 0, atkCd: 0, dead: false,
-      type: 'boss', sprite: 'boss', ai: { t: rand(3, 4), phase: 'walk', chx: 0, chy: 0 },
+      type: 'boss', sprite: 'boss', anim: rand(0, 36), ai: { t: rand(3, 4), phase: 'walk', chx: 0, chy: 0 },
     };
     pushOutOfObstacles(bossRef, 40);
     zombies.push(bossRef);
@@ -596,13 +599,16 @@
     if (player.dashT > 0) {
       spd *= 2.8;
       player.dashT -= dt;
-      ghosts.push({ x: player.x, y: player.y, life: 0.28, max: 0.28, dir: dirIndex(player.facing) });
+      ghosts.push({ x: player.x, y: player.y, life: 0.28, max: 0.28, dir: dirIndex(player.facing), frame: player.moving ? Math.floor(player.anim / 9) % 4 : 0 });
       if (ghosts.length > 60) ghosts.shift();
       const tvx = (mx || my) ? mx : Math.cos(player.aim);
       const tvy = (mx || my) ? my : Math.sin(player.aim);
       parts.push({ x: player.x - tvx * 14, y: player.y - tvy * 14, vx: -tvx * 140, vy: -tvy * 140, life: 0.22, max: 0.22, size: 2.5, c: '#9adcff' });
     }
     if (player.dashCd > 0) player.dashCd -= dt;
+    const moved = Math.hypot(mx, my) * spd * dt;
+    player.anim += moved;
+    player.moving = moved > 0.5;
     player.x = clamp(player.x + mx * spd * dt, 24, WORLD - 24);
     player.y = clamp(player.y + my * spd * dt, 24, WORLD - 24);
     pushOutOfObstacles(player, player.r);
@@ -668,6 +674,7 @@
           z.face = Math.atan2(player.y - z.y, player.x - z.x);
           z.x += Math.cos(z.face) * z.speed * dt;
           z.y += Math.sin(z.face) * z.speed * dt;
+          z.anim += z.speed * dt;
           if (z.ai.t <= 0) { z.ai.phase = 'windup'; z.ai.t = 0.8; sfx.roar(); }
         } else if (z.ai.phase === 'windup') {
           z.face = Math.atan2(player.y - z.y, player.x - z.x);
@@ -681,6 +688,7 @@
           z.y = clamp(z.y + z.ai.chy * 340 * dt, 30, WORLD - 30);
           if (pushOutOfObstacles(z, z.r)) {
             z.ai.phase = 'walk'; z.ai.t = rand(2.5, 4.5);
+        z.anim += 340 * dt;
             shake = Math.min(shake + 5, 14);
           }
           z.face = Math.atan2(z.ai.chy, z.ai.chx);
@@ -691,6 +699,7 @@
         z.face = Math.atan2(player.y - z.y, player.x - z.x);
         z.x += Math.cos(z.face) * z.speed * dt;
         z.y += Math.sin(z.face) * z.speed * dt;
+        z.anim += z.speed * dt;
       }
       z.wob += dt;
       pushOutOfObstacles(z, z.r);
@@ -870,13 +879,13 @@
   function drawGhost(gh) {
     const s = depthScale(gh.y);
     ctx.globalAlpha = clamp(gh.life / gh.max, 0, 1) * 0.3;
-    drawSpriteAt(ASSETS.player[gh.dir || 2], gh.x, gh.y + 4, s, false, 0);
+    drawSpriteAt(ASSETS.player[gh.dir || 2][gh.frame || 0], gh.x, gh.y + 4, s, false, 0);
     ctx.globalAlpha = 1;
   }
   function drawZombie(z) {
     const s = depthScale(z.y);
     const set = ASSETS[z.sprite] || ASSETS.zombie;
-    const sp = set[dirIndex(z.face)];
+    const sp = set[dirIndex(z.face)][Math.floor(z.anim / 9) % 4];
     const feetY = z.y + z.r * 0.5;
     if (z.type === 'boss' && z.ai.phase === 'windup') {
       const ta = z.face;
@@ -917,7 +926,7 @@
       ctx.fillStyle = 'rgba(140,225,255,0.22)';
       ctx.beginPath(); ctx.arc(player.x, feetY, player.r + 8, 0, TAU); ctx.fill();
     }
-    const sp = ASSETS.player[dirIndex(player.facing)];
+    const sp = ASSETS.player[dirIndex(player.facing)][player.moving ? Math.floor(player.anim / 9) % 4 : 0];
     drawSpriteAt(sp, player.x, feetY + 2, s, false, 0);
     // gun rotates toward aim, held at chest height
     const gy = feetY + 2 - sp.h * s * 0.5;
