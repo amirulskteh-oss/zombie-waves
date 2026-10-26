@@ -46,20 +46,85 @@
   // ---------- audio ----------
   let actx = null, muted = loadPref('zombie-waves.muted', false);
   let volume = loadNum('zombie-waves.volume', 100);
+  let musicVol = loadNum('zombie-waves.musicvol', 60);
+  let sfxVol = loadNum('zombie-waves.sfxvol', 100);
+  let masterGain = null, sfxGain = null, musicGain = null;
+  let musicStarted = false, musicTimer = null, nextStep = 0, stepIdx = 0;
+  function applyAudioVolumes() {
+    if (!actx || !masterGain) return;
+    const t = actx.currentTime;
+    masterGain.gain.setTargetAtTime(volume / 100, t, 0.05);
+    sfxGain.gain.setTargetAtTime(sfxVol / 100, t, 0.05);
+    musicGain.gain.setTargetAtTime((muted ? 0 : 1) * (musicVol / 100) * 0.5, t, 0.05);
+  }
   function audio() {
-    if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { /* no audio */ } }
+    if (!actx) {
+      try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { /* no audio */ }
+      if (actx) {
+        masterGain = actx.createGain();
+        masterGain.gain.value = volume / 100;
+        masterGain.connect(actx.destination);
+        sfxGain = actx.createGain();
+        sfxGain.gain.value = sfxVol / 100;
+        sfxGain.connect(masterGain);
+        musicGain = actx.createGain();
+        musicGain.gain.value = musicVol / 100 * 0.5;
+        musicGain.connect(masterGain);
+        startMusic();
+      }
+    }
     if (actx && actx.state === 'suspended') actx.resume();
   }
+  // Procedural dark-ambient loop: drone pad + minor-key bass pulse.
+  function startMusic() {
+    if (musicStarted || !actx) return;
+    musicStarted = true;
+    const pad = (freq, detune, cut) => {
+      const o = actx.createOscillator();
+      o.type = 'sawtooth';
+      o.frequency.value = freq;
+      o.detune.value = detune;
+      const lp = actx.createBiquadFilter();
+      lp.type = 'lowpass'; lp.frequency.value = cut;
+      const g = actx.createGain(); g.gain.value = 0.028;
+      o.connect(lp); lp.connect(g); g.connect(musicGain);
+      o.start();
+    };
+    pad(55, -6, 300); pad(55, 5, 300); pad(110.3, 2, 420);
+    const seq = [55, 0, 55, 0, 65.4, 0, 49, 0, 55, 0, 55, 0, 82.4, 0, 65.4, 41.2];
+    const stepDur = 0.27;
+    nextStep = actx.currentTime + 0.15;
+    musicTimer = setInterval(() => {
+      if (!actx) return;
+      while (nextStep < actx.currentTime + 0.35) {
+        const freq = seq[stepIdx % seq.length];
+        if (freq > 0 && !muted && musicVol > 0) {
+          const o = actx.createOscillator();
+          o.type = 'triangle';
+          o.frequency.setValueAtTime(freq, nextStep);
+          o.frequency.exponentialRampToValueAtTime(freq * 0.97, nextStep + stepDur * 0.9);
+          const g = actx.createGain();
+          g.gain.setValueAtTime(0.0001, nextStep);
+          g.gain.exponentialRampToValueAtTime(0.09, nextStep + 0.02);
+          g.gain.exponentialRampToValueAtTime(0.0001, nextStep + stepDur * 0.92);
+          o.connect(g); g.connect(musicGain);
+          o.start(nextStep); o.stop(nextStep + stepDur);
+        }
+        stepIdx++;
+        nextStep += stepDur;
+      }
+    }, 120);
+  }
   function tone(f0, f1, dur, type, vol, delay = 0) {
-    if (!actx || muted) return;
+    if (!actx || muted || !sfxGain) return;
     const t0 = actx.currentTime + delay;
     const o = actx.createOscillator(), g = actx.createGain();
     o.type = type;
     o.frequency.setValueAtTime(f0, t0);
     o.frequency.exponentialRampToValueAtTime(Math.max(f1, 1), t0 + dur);
-    g.gain.setValueAtTime(vol * (volume / 100), t0);
+    g.gain.setValueAtTime(vol * (sfxVol / 100), t0);
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-    o.connect(g); g.connect(actx.destination);
+    o.connect(g); g.connect(sfxGain);
     o.start(t0); o.stop(t0 + dur + 0.02);
   }
   const sfx = {
@@ -197,6 +262,8 @@
     hintsOn = true;
     shakeLevel = 100;
     volume = 100;
+    musicVol = 60;
+    sfxVol = 100;
     comboVisible = true;
     clearPref('zombie-waves.muted');
     clearPref('zombie-waves.hints');
@@ -204,7 +271,10 @@
     clearPref('zombie-waves.shakelevel');
     clearPref('zombie-waves.shake');
     clearPref('zombie-waves.volume');
+    clearPref('zombie-waves.musicvol');
+    clearPref('zombie-waves.sfxvol');
     btnMute.textContent = '🔊';
+    applyAudioVolumes();
     showHints();
     updateSettingsRows();
   }
@@ -214,6 +284,8 @@
   const SETTINGS_ROWS = [
     { nm: 'Sound', ds: 'Toggle all audio', get: () => muted, on: '🔊 On', off: '🔇 Off', toggle: toggleMute },
     { nm: 'Master Volume', ds: 'Overall loudness', slider: true, get: () => volume, set: setVolume },
+    { nm: 'Music', ds: 'Ambient soundtrack', slider: true, get: () => musicVol, set: setMusicVol },
+    { nm: 'Sound Effects', ds: 'Gunfire, hits, and UI', slider: true, get: () => sfxVol, set: setSfxVol },
     { nm: 'Key Hints', ds: 'Show key hints on menus', get: () => hintsOn, on: '👁 On', off: '👁 Off', toggle: toggleHints },
     { nm: 'Combo Counter', ds: 'Show kill combo and multiplier in the HUD', get: () => comboVisible, on: '🔗 On', off: '🔗 Off', toggle: toggleComboHud },
     { nm: 'Screen Shake', ds: 'Camera motion intensity on hits and dashes', slider: true, get: () => shakeLevel, set: setShake },
@@ -221,6 +293,17 @@
   function setVolume(v) {
     volume = clamp(Math.round(v), 0, 100);
     try { localStorage.setItem('zombie-waves.volume', String(volume)); } catch (e) { /* storage unavailable */ }
+    applyAudioVolumes();
+  }
+  function setSfxVol(v) {
+    sfxVol = clamp(Math.round(v), 0, 100);
+    try { localStorage.setItem('zombie-waves.sfxvol', String(sfxVol)); } catch (e) { /* storage unavailable */ }
+    applyAudioVolumes();
+  }
+  function setMusicVol(v) {
+    musicVol = clamp(Math.round(v), 0, 100);
+    try { localStorage.setItem('zombie-waves.musicvol', String(musicVol)); } catch (e) { /* storage unavailable */ }
+    applyAudioVolumes();
   }
   function setShake(v) {
     shakeLevel = clamp(Math.round(v), 0, 100);
