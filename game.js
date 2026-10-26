@@ -157,7 +157,7 @@
 
   // ---------- key hint visibility ----------
   let hintsOn = loadPref('zombie-waves.hints', true), hintsTimer = null;
-  let shakeOn = loadPref('zombie-waves.shake', true);
+  let shakeLevel = loadNum('zombie-waves.shakelevel', loadPref('zombie-waves.shake', true) ? 100 : 0);
   function hintEls() { return document.querySelectorAll('.keyhints, .keys'); }
   function showHints() {
     if (!hintsOn) return;
@@ -182,17 +182,18 @@
     updateSettingsRows();
   }
   function toggleShake() {
-    shakeOn = !shakeOn;
-    savePref('zombie-waves.shake', shakeOn);
+    shakeLevel = shakeLevel > 0 ? 0 : 100;
+    savePref('zombie-waves.shakelevel', shakeLevel > 0);
     updateSettingsRows();
   }
   function resetSettings() {
     muted = false;
     hintsOn = true;
-    shakeOn = true;
+    shakeLevel = 100;
     volume = 100;
     clearPref('zombie-waves.muted');
     clearPref('zombie-waves.hints');
+    clearPref('zombie-waves.shakelevel');
     clearPref('zombie-waves.shake');
     clearPref('zombie-waves.volume');
     btnMute.textContent = '🔊';
@@ -206,11 +207,15 @@
     { nm: 'Sound', ds: 'Toggle all audio', get: () => muted, on: '🔊 On', off: '🔇 Off', toggle: toggleMute },
     { nm: 'Master Volume', ds: 'Overall loudness', slider: true, get: () => volume, set: setVolume },
     { nm: 'Key Hints', ds: 'Show key hints on menus', get: () => hintsOn, on: '👁 On', off: '👁 Off', toggle: toggleHints },
-    { nm: 'Screen Shake', ds: 'Camera motion on hits and dashes', get: () => shakeOn, on: '〰 On', off: '〰 Off', toggle: toggleShake },
+    { nm: 'Screen Shake', ds: 'Camera motion intensity on hits and dashes', slider: true, get: () => shakeLevel, set: setShake },
   ];
   function setVolume(v) {
     volume = clamp(Math.round(v), 0, 100);
     try { localStorage.setItem('zombie-waves.volume', String(volume)); } catch (e) { /* storage unavailable */ }
+  }
+  function setShake(v) {
+    shakeLevel = clamp(Math.round(v), 0, 100);
+    try { localStorage.setItem('zombie-waves.shakelevel', String(shakeLevel)); } catch (e) { /* storage unavailable */ }
   }
   // Shared focus-fade hooks (defined in fade.js, loaded before this script).
   const { makeFader, attachFade } = window.ZWFade;
@@ -1072,8 +1077,9 @@
     ctx.fillStyle = '#0a0f0c';
     ctx.fillRect(0, 0, vw, vh);
 
-    const shx = shakeOn ? rand(-shake, shake) : 0;
-    const shy = shakeOn ? rand(-shake, shake) : 0;
+    const intensity = shakeLevel / 100;
+    const shx = intensity > 0 ? rand(-shake, shake) * intensity : 0;
+    const shy = intensity > 0 ? rand(-shake, shake) * intensity : 0;
     const zoom = 1 + zoomPunch;
     ctx.save();
     ctx.translate(vw / 2, vh / 2);
