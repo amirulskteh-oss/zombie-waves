@@ -160,6 +160,10 @@
   let comboVisible = loadPref('zombie-waves.combo', true);
   let reducedFlash = loadPref('zombie-waves.reducedflash', false);
   let highContrast = loadPref('zombie-waves.highcontrast', false);
+  let cbMode = loadNum('zombie-waves.cbmode', 0, 3);
+  const CB_FILTERS = ['none', 'hue-rotate(90deg) saturate(1.1)', 'hue-rotate(140deg) saturate(1.15)', 'hue-rotate(-70deg) saturate(1.1)'];
+  const CB_NAMES = ['Off', 'Deuteranopia', 'Protanopia', 'Tritanopia'];
+  const worldFilter = () => CB_FILTERS[cbMode] || 'none';
   let hudScale = loadNum('zombie-waves.hudscale', 100, 200);
   const COMBO_WINDOW = 3;
   const comboMult = () => 1 + Math.min(3, Math.floor(combo / 5)); // ×1 → ×4
@@ -266,6 +270,11 @@
     savePref('zombie-waves.highcontrast', highContrast);
     updateSettingsRows();
   }
+  function cycleColorblind() {
+    cbMode = (cbMode + 1) % CB_NAMES.length;
+    try { localStorage.setItem('zombie-waves.cbmode', String(cbMode)); } catch (e) { /* storage unavailable */ }
+    updateSettingsRows();
+  }
   function setHudScale(v) {
     hudScale = clamp(Math.round(v), 50, 200);
     try { localStorage.setItem('zombie-waves.hudscale', String(hudScale)); } catch (e) { /* storage unavailable */ }
@@ -320,6 +329,7 @@
     { nm: 'Combo Counter', ds: 'Show kill combo and multiplier in the HUD', get: () => comboVisible, on: '🔗 On', off: '🔗 Off', toggle: toggleComboHud },
     { nm: 'Reduced Flashing', ds: 'Soften screen flashes for light sensitivity', get: () => reducedFlash, on: '🛡 Reduced', off: '⚡ Full', toggle: toggleReducedFlash },
     { nm: 'High Contrast', ds: 'Colorblind-friendly palette and outlines', get: () => highContrast, on: '◐ On', off: '◐ Off', toggle: toggleHighContrast },
+    { nm: 'Colorblind Palette', ds: 'Hue shift for deutan/protan/tritan vision', get: () => cbMode, modes: CB_NAMES, cycle: cycleColorblind },
     { nm: 'HUD Text Scale', ds: 'Size of in-game text and numbers', slider: true, get: () => hudScale, set: setHudScale },
     { nm: 'Screen Shake', ds: 'Camera motion intensity on hits and dashes', slider: true, get: () => shakeLevel, set: setShake },
   ];
@@ -369,12 +379,13 @@
         });
       } else {
         row.className = 'perk clickable';
+        const label = r.modes ? r.modes[r.get()] : (r.get() ? r.on : r.off);
         row.innerHTML =
           `<div class="pinfo"><div class="pnm">${r.nm}</div><div class="pds">${r.ds}</div></div>` +
-          `<button class="buy">${r.get() ? r.on : r.off}</button>`;
+          `<button class="buy">${label}</button>`;
         const pill = row.querySelector('.buy');
         const fader = makeFader([pill], pill);
-        row.addEventListener('click', () => r.toggle());
+        row.addEventListener('click', () => (r.cycle ? r.cycle() : r.toggle()));
         attachFade(row, fader, { input: pill });
       }
       elSetRows.appendChild(row);
@@ -1221,6 +1232,7 @@
     const shy = intensity > 0 ? rand(-shake, shake) * intensity : 0;
     const zoom = 1 + zoomPunch;
     ctx.save();
+    ctx.filter = worldFilter(); // colorblind palette hue shift
     ctx.translate(vw / 2, vh / 2);
     ctx.scale(zoom, zoom);
     ctx.translate(-vw / 2, -vh / 2);
