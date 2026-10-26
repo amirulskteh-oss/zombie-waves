@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Zombie Waves</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; background: #0a0f0c; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    touch-action: none; overscroll-behavior: none;
+    user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent;
+  }
+  canvas { position: fixed; inset: 0; display: block; }
+
+  /* ---------- HUD ---------- */
+  .hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
+  #topbar { position: absolute; top: 12px; left: 12px; width: min(280px, 60vw); }
+  .bar { height: 14px; border-radius: 8px; background: rgba(255,255,255,0.10); overflow: hidden; border: 1px solid rgba(255,255,255,0.18); }
+  .bar > div { height: 100%; width: 100%; transition: width .12s linear; }
+  #hp { background: linear-gradient(90deg, #3fd068, #2ecc71); }
+  #xp { margin-top: 5px; background: rgba(255,255,255,0.10); }
+  #xp > div { background: linear-gradient(90deg, #38b6ff, #4de3ff); }
+  #stats { margin-top: 6px; color: #e6f0e4; font-size: 14px; font-weight: 600; text-shadow: 0 1px 3px rgba(0,0,0,.6); white-space: nowrap; }
+
+  #btns { position: absolute; top: 12px; right: 12px; display: flex; gap: 8px; }
+  .iconbtn {
+    pointer-events: auto; width: 42px; height: 42px; border-radius: 50%;
+    border: 1px solid rgba(255,255,255,.25); background: rgba(10,16,12,.55);
+    color: #eaf4e2; font-size: 18px; cursor: pointer;
+  }
+  #dashbtn {
+    position: absolute; right: 22px; bottom: 26px; width: 74px; height: 74px; border-radius: 50%;
+    pointer-events: auto; border: 2px solid rgba(140,227,74,.6); background: rgba(22,35,26,.55);
+    color: #c9f2a0; font-size: 26px; cursor: pointer; display: none;
+  }
+  @media (pointer: coarse) { #dashbtn { display: block; } }
+
+  #banner {
+    position: absolute; top: 16%; left: 0; right: 0; text-align: center;
+    font-size: clamp(34px, 8vw, 64px); font-weight: 900; letter-spacing: 8px;
+    color: #cff2a8; text-shadow: 0 0 30px rgba(140,227,74,.5), 0 2px 8px rgba(0,0,0,.7);
+    opacity: 0; transform: scale(.85); transition: opacity .25s, transform .25s;
+  }
+  #banner.show { opacity: 1; transform: scale(1); }
+
+  #hurtflash {
+    position: absolute; inset: 0; opacity: 0;
+    background: radial-gradient(ellipse at center, rgba(255,0,0,0) 40%, rgba(200,0,0,.5) 100%);
+    pointer-events: none;
+  }
+
+  /* ---------- overlays ---------- */
+  .overlay {
+    position: fixed; inset: 0; z-index: 20;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px;
+    background: rgba(6,10,8,.72); backdrop-filter: blur(3px);
+    text-align: center;
+  }
+  .hidden { display: none !important; }
+  .overlay h1 {
+    font-size: clamp(36px, 9vw, 64px); letter-spacing: 6px; font-weight: 900;
+    color: #8be34a; text-shadow: 0 0 24px rgba(120,255,60,.35);
+  }
+  .sub { color: #cfd8cc; max-width: 440px; line-height: 1.65; font-size: 15px; padding: 0 18px; }
+  .keys { color: #7d9382; font-size: 13px; letter-spacing: 1px; }
+  .keyhints { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: center; max-width: 540px; }
+  .kgroup { display: flex; align-items: center; gap: 5px; }
+  .kbd {
+    display: inline-block; min-width: 24px; padding: 3px 8px;
+    border: 1px solid rgba(255,255,255,.3); border-bottom-width: 3px; border-radius: 6px;
+    background: #1a241d; color: #eaf4e2; font-size: 12px; font-weight: 700;
+    text-align: center; font-family: inherit;
+  }
+  .klabel { color: #9db3a2; font-size: 13px; }
+  .keyhints, .keys { transition: opacity .7s ease; }
+  .keyhints.fading, .keys.fading { opacity: 0; }
+  .shopcredits { color: #4dc3e8; font-weight: 700; font-size: 20px; letter-spacing: 1px; }
+  #perks { display: flex; flex-direction: column; gap: 8px; width: min(460px, 92vw); }
+  .perk { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: #16231a; border: 2px solid #39593f; border-radius: 12px; padding: 10px 14px; }
+  .pinfo { text-align: left; }
+  .pnm { font-weight: 700; color: #eaf4e2; font-size: 15px; }
+  .pkey { display: inline-block; background: #1a3340; color: #bfefff; border-radius: 4px; padding: 0 5px; font-size: 11px; margin-right: 4px; }
+  .pmenu { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  .pbtn { pointer-events: auto; cursor: pointer; border: 1px solid rgba(255,255,255,.3); background: #16231a; color: #eaf4e2; padding: 10px 18px; font-size: 15px; font-weight: 600; border-radius: 10px; transition: background .15s; }
+  .pbtn:hover { background: #20352a; }
+  #settingrows { display: flex; flex-direction: column; gap: 8px; width: min(460px, 92vw); }
+  .volwrap { display: flex; align-items: center; gap: 8px; }
+  .voltrack { position: relative; padding-bottom: 7px; }
+  .voltrack input[type="range"] { width: 120px; pointer-events: auto; accent-color: #4dc3e8; cursor: pointer; display: block; }
+  .volticks { position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: space-between; pointer-events: none; transition: opacity .6s ease; }
+  .volticks i { width: 1px; height: 4px; background: rgba(255,255,255,.3); }
+  .volticks.dim { opacity: 0; }
+  .plv { color: #8be34a; font-size: 12px; transition: opacity .6s ease; }
+  .plv.dim { opacity: 0; }
+  .pds { color: #9db3a2; font-size: 12px; }
+  .perk.clickable { cursor: pointer; }
+  .buy { pointer-events: auto; cursor: pointer; border: 1px solid #4dc3e8; background: #12222a; color: #bfefff; padding: 8px 14px; font-size: 14px; font-weight: 700; border-radius: 8px; white-space: nowrap; transition: opacity .6s ease; }
+  .buy.dim { opacity: 0; }
+  .buy:disabled { opacity: 0.35; cursor: default; }
+  .buy:not(:disabled):hover { background: #1a3340; }
+  .hiscore { color: #8be34a; font-weight: 700; font-size: 18px; letter-spacing: 1px; }
+  .newrecord { color: #ffd966; font-weight: 900; font-size: 22px; letter-spacing: 2px; text-shadow: 0 0 18px rgba(255,200,80,.5); }
+
+  .btn {
+    pointer-events: auto; cursor: pointer; border: 2px solid #8be34a; background: #16231a;
+    color: #eaf4e2; padding: 14px 42px; font-size: 20px; font-weight: 700; letter-spacing: 2px;
+    border-radius: 12px; transition: transform .1s, background .15s;
+  }
+  .btn:hover { background: #20352a; transform: scale(1.04); }
+  .btn:active { transform: scale(.97); }
+
+  #cards { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; padding: 0 12px; }
+  .card {
+    background: #16231a; border: 2px solid #39593f; border-radius: 14px;
+    padding: 18px 20px; width: min(190px, 80vw); text-align: center; cursor: pointer;
+    transition: transform .12s, border-color .12s;
+  }
+  .card:hover { border-color: #8be34a; transform: translateY(-3px); }
+  .card .ico { font-size: 32px; }
+  .card .nm { font-weight: 700; color: #eaf4e2; margin: 8px 0 4px; font-size: 15px; }
+  .card .ds { color: #9db3a2; font-size: 13px; }
+
+  .ostats { display: flex; gap: 26px; flex-wrap: wrap; justify-content: center; }
+  .ost { display: flex; flex-direction: column; align-items: center; min-width: 64px; }
+  .ost span { color: #9db3a2; font-size: 13px; }
+  .ost b { color: #eaf4e2; font-size: 26px; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div class="hud">
+  <div id="topbar">
+    <div class="bar"><div id="hp"></div></div>
+    <div class="bar" id="xp"><div id="xpfill"></div></div>
+    <div id="stats"></div>
+  </div>
+  <div id="btns">
+    <button id="pause" class="iconbtn">⏸</button>
+    <button id="mute" class="iconbtn">🔊</button>
+  </div>
+  <div id="banner"></div>
+  <div id="hurtflash"></div>
+  <button id="dashbtn">⚡</button>
+</div>
+
+<div id="menu" class="overlay">
+  <h1>ZOMBIE WAVES</h1>
+  <div class="sub">Survive the endless horde. Your gun fires on its own — just keep moving, grab XP gems, and pick an upgrade every level.</div>
+  <div id="hiscore" class="hiscore"></div>
+  <button id="play" class="btn">▶ PLAY</button>
+  <div class="keyhints">
+    <span class="kgroup"><span class="kbd">↵ Enter</span><span class="kbd">Space</span><span class="klabel">play</span></span>
+    <span class="kgroup"><span class="kbd">W</span><span class="kbd">A</span><span class="kbd">S</span><span class="kbd">D</span><span class="klabel">move</span></span>
+    <span class="kgroup"><span class="kbd">Space</span><span class="kbd">Shift</span><span class="klabel">dash</span></span>
+    <span class="kgroup"><span class="kbd">P</span><span class="klabel">pause</span><span class="kbd">M</span><span class="klabel">mute</span></span>
+    <span class="kgroup"><span class="kbd">H</span><span class="klabel">hints</span></span>
+  </div>
+  <div class="keys">Mobile: left half = joystick · ⚡ dash button</div>
+</div>
+
+<div id="levelup" class="overlay hidden">
+  <h1 id="lvltitle">LEVEL UP</h1>
+  <div id="cards"></div>
+</div>
+
+<div id="shop" class="overlay hidden">
+  <h1 style="color:#4dc3e8">SUPPLY SHOP</h1>
+  <div id="shopcredits" class="shopcredits"></div>
+  <div id="perks"></div>
+  <button id="ready" class="btn">▶ NEXT WAVE</button>
+  <div class="keyhints">
+    <span class="kgroup"><span class="kbd">1</span><span class="klabel">–</span><span class="kbd">7</span><span class="klabel">buy perk</span></span>
+    <span class="kgroup"><span class="kbd">Space</span><span class="klabel">next wave</span></span>
+    <span class="kgroup"><span class="kbd">M</span><span class="klabel">mute</span></span>
+    <span class="kgroup"><span class="kbd">H</span><span class="klabel">hints</span></span>
+  </div>
+</div>
+
+<div id="pauseov" class="overlay hidden">
+  <h1>PAUSED</h1>
+  <button id="resume" class="btn">RESUME</button>
+  <div class="pmenu">
+    <button id="psettings" class="pbtn">⚙ Settings</button>
+    <button id="prestart" class="pbtn">↻ Restart</button>
+  </div>
+  <div class="keyhints">
+    <span class="kgroup"><span class="kbd">P</span><span class="kbd">Esc</span><span class="klabel">resume</span></span>
+  </div>
+</div>
+
+<div id="settings" class="overlay hidden">
+  <h1 style="color:#4dc3e8">SETTINGS</h1>
+  <div id="settingrows"></div>
+  <div class="pmenu">
+    <button id="preset" class="pbtn">⟲ Reset to Defaults</button>
+  </div>
+  <button id="setback" class="btn">← BACK</button>
+  <div class="keyhints">
+    <span class="kgroup"><span class="kbd">Esc</span><span class="klabel">back</span></span>
+  </div>
+</div>
+
+<div id="over" class="overlay hidden">
+  <h1 style="color:#e5484d">YOU DIED</h1>
+  <div id="overstats" class="ostats"></div>
+  <div id="newrecord" class="newrecord hidden">🏆 NEW HIGH SCORE!</div>
+  <button id="restart" class="btn">↻ TRY AGAIN</button>
+  <div class="keyhints">
+    <span class="kgroup"><span class="kbd">R</span><span class="klabel">try again</span></span>
+  </div>
+</div>
+
+<script src="fade.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
