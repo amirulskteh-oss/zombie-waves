@@ -242,7 +242,7 @@
   // Loaded async; on success they replace the procedural canvases. On failure
   // the procedural sprites stay as fallback.
   const IMAGE_SPRITES = [
-    { key: 'player', file: 'sprites/player.png', w: 30, h: 38, set: true },
+    { key: 'player', w: 30, h: 38, set: true, perDir: { 0: 'sprites/player_E.png', 1: 'sprites/player_SE.png', 2: 'sprites/player.png', 3: 'sprites/player_SW.png', 4: 'sprites/player_W.png', 5: 'sprites/player_NW.png', 6: 'sprites/player_N.png', 7: 'sprites/player_NE.png' } },
     { key: 'zombie', file: 'sprites/zombie.png', w: 30, h: 36, set: true },
     { key: 'fast', file: 'sprites/fast.png', w: 26, h: 30, set: true },
     { key: 'brute', file: 'sprites/brute.png', w: 44, h: 50, set: true },
@@ -254,6 +254,20 @@
     { key: 'flash', file: 'sprites/flash.png', w: 40, h: 40 },
   ];
   for (const cfg of IMAGE_SPRITES) {
+    if (typeof Image === 'undefined') break; // non-browser environment: keep procedural
+    if (cfg.perDir) {
+      for (const dStr of Object.keys(cfg.perDir)) {
+        const d = +dStr;
+        const img = new Image();
+        img.onload = () => {
+          const spr = { img, w: cfg.w, h: cfg.h };
+          for (let fr = 0; fr < sprites[cfg.key][d].length; fr++) sprites[cfg.key][d][fr] = spr;
+        };
+        img.onerror = () => { /* keep procedural fallback for this direction */ };
+        img.src = cfg.perDir[dStr];
+      }
+      continue;
+    }
     const img = new Image();
     img.onload = () => {
       const spr = { img, w: cfg.w, h: cfg.h };
