@@ -91,6 +91,9 @@
   let zoomPunch = 0;
   let slowmo = 0;
   let hitMarker = 0, aimTargetRef = null;
+  let combo = 0, comboTimer = 0, comboPulse = 0;
+  const COMBO_WINDOW = 3;
+  const comboMult = () => 1 + Math.min(3, Math.floor(combo / 5)); // ×1 → ×4
   const xpNeed = () => 5 + level * 3;
 
   let score = 0, bossRef = null;
@@ -355,6 +358,7 @@
     waveActive = false; interTimer = 2.5;
     state = 'playing'; paused = false; settingsOpen = false;
     hitstop = 0; killFlash = 0; zoomPunch = 0; slowmo = 0; hitMarker = 0; aimTargetRef = null;
+    combo = 0; comboTimer = 0; comboPulse = 0;
     shake = 0; hurtFlash = 0;
     hideAll();
     banner('GET READY');
@@ -416,9 +420,12 @@
   function killZombie(z) {
     z.dead = true;
     kills++;
+    combo++;
+    comboTimer = COMBO_WINDOW;
+    comboPulse = 1;
     if (z.type === 'boss') {
       bossRef = null;
-      score += 250;
+      score += 250 * comboMult();
       credits += 20;
       blood(z.x, z.y, 36);
       addStain(z.x, z.y, rand(22, 30));
@@ -433,7 +440,7 @@
       banner('BOSS DOWN!');
       tone(70, 30, 0.7, 'sawtooth', 0.1);
     } else {
-      score += 10;
+      score += 10 * comboMult();
       blood(z.x, z.y, 12);
       shake = Math.min(shake + 3, 14);
       if (z.type === 'brute') {
@@ -616,6 +623,11 @@
     hurtFlash = Math.max(0, hurtFlash - dt);
     muzzle = Math.max(0, muzzle - dt);
     killFlash = Math.max(0, killFlash - dt * 3.5);
+    comboPulse = Math.max(0, comboPulse - dt * 4);
+    if (comboTimer > 0) {
+      comboTimer -= rdt; // combo window runs on real time
+      if (comboTimer <= 0) combo = 0;
+    }
     hitMarker = Math.max(0, hitMarker - dt);
     zoomPunch = Math.max(0, zoomPunch - dt * 2.2);
 
@@ -1273,6 +1285,28 @@
     if (killFlash > 0) {
       ctx.fillStyle = 'rgba(255,244,214,' + Math.min(killFlash * 0.35, 0.32).toFixed(3) + ')';
       ctx.fillRect(0, 0, vw, vh);
+    }
+
+    // kill combo counter with score multiplier
+    if (combo >= 2 && comboTimer > 0 && (state === 'playing' || state === 'over')) {
+      const m = comboMult();
+      const pulse = 1 + comboPulse * 0.22;
+      ctx.save();
+      ctx.translate(vw / 2, 122);
+      ctx.scale(pulse, pulse);
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#ffd966';
+      ctx.font = 'bold 26px "Segoe UI", system-ui, sans-serif';
+      ctx.fillText(combo + ' COMBO', 0, 0);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 14px "Segoe UI", system-ui, sans-serif';
+      ctx.fillText('×' + m + ' SCORE', 0, 20);
+      const bw = 120;
+      ctx.fillStyle = 'rgba(255,255,255,0.2)';
+      ctx.fillRect(-bw / 2, 28, bw, 4);
+      ctx.fillStyle = '#ffd966';
+      ctx.fillRect(-bw / 2, 28, bw * (comboTimer / COMBO_WINDOW), 4);
+      ctx.restore();
     }
 
     // touch joystick
