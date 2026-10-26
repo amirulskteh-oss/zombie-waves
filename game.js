@@ -24,6 +24,7 @@
   const canvas = $('game');
   const ctx = canvas.getContext('2d');
   const WORLD = 2400;
+  const ASSETS = window.ZWAssets;
   let vw = 0, vh = 0;
   function resize() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -371,12 +372,14 @@
     const y = clamp(player.y + Math.sin(ang) * rad, 30, WORLD - 30);
     const bruteP = Math.min(0.12 + wave * 0.02, 0.3);
     const roll = Math.random();
+    let type = 'normal';
     const base = { hp: 4 + wave * 2.2, speed: 52 + rand(0, 30) + Math.min(wave * 1.5, 50), dmg: 8, r: 15, color: '#5f7d3f', edge: '#3f5428' };
-    if (roll < bruteP) { base.hp *= 3.2; base.speed *= 0.62; base.dmg = 16; base.r = 24; base.color = '#4f6b36'; base.edge = '#33451f'; }
-    else if (roll < bruteP + 0.35) { base.hp *= 0.55; base.speed *= 1.75; base.dmg = 6; base.r = 11; base.color = '#8a9a4f'; base.edge = '#5c692f'; }
+    if (roll < bruteP) { base.hp *= 3.2; base.speed *= 0.62; base.dmg = 16; base.r = 24; base.color = '#4f6b36'; base.edge = '#33451f'; type = 'brute'; }
+    else if (roll < bruteP + 0.35) { base.hp *= 0.55; base.speed *= 1.75; base.dmg = 6; base.r = 11; base.color = '#8a9a4f'; base.edge = '#5c692f'; type = 'fast'; }
     zombies.push({
       x, y, r: base.r, hp: base.hp, maxHp: base.hp, speed: base.speed, dmg: base.dmg,
       color: base.color, edge: base.edge, face: 0, wob: rand(0, 6), flash: 0, atkCd: 0, dead: false,
+      sprite: type === 'brute' ? 'brute' : type === 'fast' ? 'fast' : 'zombie',
     });
   }
 
@@ -391,7 +394,7 @@
       speed: 28 + Math.min(wave, 30), dmg: 25,
       color: '#6b3f3f', edge: '#3c2020',
       face: 0, wob: rand(0, 6), flash: 0, atkCd: 0, dead: false,
-      type: 'boss', ai: { t: rand(3, 4), phase: 'walk', chx: 0, chy: 0 },
+      type: 'boss', sprite: 'boss', ai: { t: rand(3, 4), phase: 'walk', chx: 0, chy: 0 },
     };
     pushOutOfObstacles(bossRef, 40);
     zombies.push(bossRef);
@@ -818,6 +821,125 @@
   }
 
   // ---------- draw ----------
+  // ---------- 2.5D sprite rendering ----------
+  function depthScale(y) {
+    return 0.78 + 0.52 * (y / WORLD); // farther (top) smaller, nearer (bottom) larger
+  }
+  function drawShadow(x, y, w, alpha) {
+    ctx.fillStyle = 'rgba(0,0,0,' + alpha + ')';
+    ctx.beginPath();
+    ctx.ellipse(x, y, w, w * 0.32, 0, 0, TAU);
+    ctx.fill();
+  }
+  function drawSpriteAt(sp, x, y, scale, flip, rot) {
+    const w = sp.w * scale;
+    const h = sp.h * scale;
+    ctx.save();
+    ctx.translate(x, y);
+    if (rot) ctx.rotate(rot);
+    if (flip) ctx.scale(-1, 1);
+    ctx.drawImage(sp.img, -w / 2, -h, w, h); // anchored bottom-center (feet on ground)
+    ctx.restore();
+  }
+  function drawRock(o) {
+    const s = depthScale(o.y);
+    drawShadow(o.x, o.y + o.r * 0.5, o.r * 0.85 * s, 0.3);
+    drawSpriteAt(ASSETS.rock, o.x, o.y + o.r * 0.55, s * (o.r / 24), false, 0);
+  }
+  function drawGem(g) {
+    const s = depthScale(g.y);
+    const bob = Math.sin(time * 3 + g.x * 0.05) * 2;
+    drawShadow(g.x, g.y + 4, 6 * s, 0.25);
+    drawSpriteAt(ASSETS.gem, g.x, g.y - 3 + bob, s, false, 0);
+  }
+  function drawDrop(d) {
+    const s = depthScale(d.y);
+    const pulse = 1 + Math.sin(time * 5) * 0.1;
+    drawShadow(d.x, d.y + 4, 10 * s, 0.28);
+    if (d.type === 'weapon') {
+      ctx.fillStyle = 'rgba(20,28,24,0.85)';
+      ctx.beginPath(); ctx.arc(d.x, d.y - 6 * s, 12 * s, 0, TAU); ctx.fill();
+    }
+    const sp = d.type === 'weapon' ? (d.weapon === 'shotgun' ? ASSETS.pickShotgun : ASSETS.pickRifle) : ASSETS.heal;
+    drawSpriteAt(sp, d.x, d.y + 2, s * pulse, false, 0);
+  }
+  function drawGhost(gh) {
+    const s = depthScale(gh.y);
+    ctx.globalAlpha = clamp(gh.life / gh.max, 0, 1) * 0.3;
+    drawSpriteAt(ASSETS.player, gh.x, gh.y + 4, s, false, 0);
+    ctx.globalAlpha = 1;
+  }
+  function drawZombie(z) {
+    const s = depthScale(z.y);
+    const sp = ASSETS[z.sprite] || ASSETS.zombie;
+    const flip = Math.cos(z.face) < 0 ? -1 : 1;
+    const feetY = z.y + z.r * 0.5;
+    if (z.type === 'boss' && z.ai.phase === 'windup') {
+      const ta = z.face;
+      ctx.strokeStyle = 'rgba(255,90,90,0.55)';
+      ctx.lineWidth = 3;
+      ctx.setLineDash([10, 8]);
+      ctx.beginPath();
+      ctx.moveTo(z.x + Math.cos(ta) * (z.r + 14), z.y + Math.sin(ta) * (z.r + 14));
+      ctx.lineTo(z.x + Math.cos(ta) * (z.r + 240), z.y + Math.sin(ta) * (z.r + 240));
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    drawShadow(z.x, feetY + 2, z.r * 1.05 * s, 0.3);
+    drawSpriteAt(sp, z.x, feetY + 2, s, flip, Math.sin(z.wob * 5) * 0.06);
+    const cy = feetY + 2 - (sp.h * s) / 2;
+    if (z.flash > 0) {
+      ctx.fillStyle = 'rgba(255,255,255,' + (z.flash * 8).toFixed(3) + ')';
+      ctx.beginPath(); ctx.arc(z.x, cy, z.r * s, 0, TAU); ctx.fill();
+    }
+    if (z.type === 'boss' && z.ai.phase === 'windup') {
+      ctx.fillStyle = 'rgba(255,60,60,' + (0.25 + 0.2 * Math.sin(time * 30)).toFixed(3) + ')';
+      ctx.beginPath(); ctx.arc(z.x, cy, z.r * s, 0, TAU); ctx.fill();
+    }
+    if (z.type !== 'boss' && z.hp < z.maxHp) {
+      const w = z.r * 2;
+      const by = feetY + 2 - sp.h * s - 9;
+      ctx.fillStyle = 'rgba(0,0,0,0.45)';
+      ctx.fillRect(z.x - w / 2, by, w, 4);
+      ctx.fillStyle = '#e5484d';
+      ctx.fillRect(z.x - w / 2, by, w * clamp(z.hp / z.maxHp, 0, 1), 4);
+    }
+  }
+  function drawPlayer() {
+    const s = depthScale(player.y);
+    const feetY = player.y + player.r * 0.5;
+    drawShadow(player.x, feetY + 2, player.r * 1.15 * s, 0.32);
+    if (player.dashT > 0) {
+      ctx.fillStyle = 'rgba(140,225,255,0.22)';
+      ctx.beginPath(); ctx.arc(player.x, feetY, player.r + 8, 0, TAU); ctx.fill();
+    }
+    const sp = ASSETS.player;
+    drawSpriteAt(sp, player.x, feetY + 2, s, false, 0);
+    // gun rotates toward aim, held at chest height
+    const gy = feetY + 2 - sp.h * s * 0.5;
+    ctx.save();
+    ctx.translate(player.x, gy);
+    ctx.rotate(player.aim);
+    ctx.fillStyle = '#8f9aa6';
+    ctx.fillRect(player.r * 0.2, -3.5, player.r + 16, 7);
+    ctx.fillStyle = '#cfd6de';
+    ctx.fillRect(player.r * 0.2, -3.5, player.r + 16, 3);
+    ctx.fillStyle = '#d9a066';
+    ctx.beginPath(); ctx.arc(player.r * 0.85, -5, 4, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(player.r * 0.85, 5, 4, 0, TAU); ctx.fill();
+    ctx.restore();
+    if (muzzle > 0) {
+      const mmx = player.x + Math.cos(player.aim) * (player.r + 18);
+      const mmy = gy + Math.sin(player.aim) * (player.r + 18);
+      ctx.fillStyle = 'rgba(255,226,140,' + (muzzle * 16).toFixed(3) + ')';
+      ctx.beginPath(); ctx.arc(mmx, mmy, 5, 0, TAU); ctx.fill();
+    }
+    if (player.hitCd > 0.3) {
+      ctx.strokeStyle = 'rgba(229,72,77,0.7)';
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(player.x, feetY, player.r + 5, 0, TAU); ctx.stroke();
+    }
+  }
   function draw() {
     ctx.clearRect(0, 0, vw, vh);
     ctx.fillStyle = '#0a0f0c';
@@ -865,164 +987,24 @@
       ctx.stroke(); ctx.restore();
     }
 
-    // obstacles (rocks)
-    for (const o of obstacles) {
-      ctx.fillStyle = 'rgba(0,0,0,0.25)';
-      ctx.beginPath(); ctx.arc(o.x + 4, o.y + 6, o.r, 0, TAU); ctx.fill();
-      ctx.fillStyle = '#4a5248';
-      ctx.beginPath(); ctx.arc(o.x, o.y, o.r, 0, TAU); ctx.fill();
-      ctx.strokeStyle = '#2c332c'; ctx.lineWidth = 3; ctx.stroke();
-      ctx.fillStyle = 'rgba(255,255,255,0.08)';
-      ctx.beginPath(); ctx.arc(o.x + Math.cos(o.seed) * o.r * 0.3, o.y + Math.sin(o.seed) * o.r * 0.3, o.r * 0.5, 0, TAU); ctx.fill();
-      ctx.fillStyle = 'rgba(0,0,0,0.18)';
-      ctx.beginPath(); ctx.arc(o.x + Math.cos(o.seed + 2.5) * o.r * 0.4, o.y + Math.sin(o.seed + 2.5) * o.r * 0.4, o.r * 0.35, 0, TAU); ctx.fill();
-    }
+    // depth shading (far = darker, near = lighter) for the 2.5D ground plane
+    const dg = ctx.createLinearGradient(0, 0, 0, WORLD);
+    dg.addColorStop(0, 'rgba(0,0,0,0.34)');
+    dg.addColorStop(0.5, 'rgba(0,0,0,0.08)');
+    dg.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = dg;
+    ctx.fillRect(0, 0, WORLD, WORLD);
 
-    // drops
-    for (const d of drops) {
-      const pulse = 1 + Math.sin(time * 5) * 0.12;
-      if (d.type === 'weapon') {
-        ctx.fillStyle = 'rgba(20,28,24,0.9)';
-        ctx.beginPath(); ctx.arc(d.x, d.y, 12 * pulse, 0, TAU); ctx.fill();
-        if (d.weapon === 'shotgun') {
-          ctx.strokeStyle = 'rgba(232,150,60,0.9)'; ctx.lineWidth = 2; ctx.stroke();
-          ctx.fillStyle = '#e8963c';
-          ctx.fillRect(d.x - 9, d.y - 4.5, 18, 3.5);
-          ctx.fillRect(d.x - 9, d.y + 1, 18, 3.5);
-          ctx.fillRect(d.x - 12, d.y - 2.5, 4, 8);
-        } else {
-          ctx.strokeStyle = 'rgba(77,195,232,0.9)'; ctx.lineWidth = 2; ctx.stroke();
-          ctx.fillStyle = '#4dc3e8';
-          ctx.fillRect(d.x - 11, d.y - 2, 22, 3.5);
-          ctx.fillRect(d.x - 13, d.y - 3, 5, 6);
-          ctx.fillRect(d.x + 2, d.y - 6, 3, 3);
-        }
-      } else {
-        ctx.fillStyle = 'rgba(255,255,255,0.92)';
-        ctx.beginPath(); ctx.arc(d.x, d.y, 10 * pulse, 0, TAU); ctx.fill();
-        ctx.strokeStyle = 'rgba(46,204,113,0.8)'; ctx.lineWidth = 2; ctx.stroke();
-        ctx.fillStyle = '#2ecc71';
-        ctx.fillRect(d.x - 6, d.y - 1.8, 12, 3.6);
-        ctx.fillRect(d.x - 1.8, d.y - 6, 3.6, 12);
-      }
-    }
-
-    // gems
-    for (const g of gems) {
-      ctx.save();
-      ctx.translate(g.x, g.y);
-      ctx.rotate(time * 4 + g.x);
-      ctx.fillStyle = 'rgba(70,224,255,0.22)';
-      ctx.beginPath(); ctx.arc(0, 0, 9, 0, TAU); ctx.fill();
-      ctx.fillStyle = '#4de3ff';
-      ctx.beginPath();
-      ctx.moveTo(0, -6); ctx.lineTo(4, 0); ctx.lineTo(0, 6); ctx.lineTo(-4, 0);
-      ctx.closePath(); ctx.fill();
-      ctx.restore();
-    }
-
-    // zombies
-    for (const z of zombies) {
-      const r = z.r;
-      ctx.fillStyle = 'rgba(0,0,0,0.22)';
-      ctx.beginPath(); ctx.arc(z.x + 2, z.y + 3, r + 1, 0, TAU); ctx.fill();
-      if (z.hp < z.maxHp && z.type !== 'boss') {
-        const w = r * 2;
-        ctx.fillStyle = 'rgba(0,0,0,0.45)';
-        ctx.fillRect(z.x - r, z.y - r - 10, w, 4);
-        ctx.fillStyle = '#e5484d';
-        ctx.fillRect(z.x - r, z.y - r - 10, w * clamp(z.hp / z.maxHp, 0, 1), 4);
-      }
-      ctx.save();
-      ctx.translate(z.x, z.y);
-      ctx.rotate(z.face + Math.sin(z.wob * 5) * 0.14);
-      if (z.type === 'boss') {
-        ctx.fillStyle = z.edge;
-        for (let i = 0; i < 10; i++) {
-          const a = (i / 10) * TAU + Math.sin(z.wob * 2) * 0.15;
-          ctx.beginPath();
-          ctx.moveTo(Math.cos(a) * r * 0.85, Math.sin(a) * r * 0.85);
-          ctx.lineTo(Math.cos(a + 0.18) * (r + 9), Math.sin(a + 0.18) * (r + 9));
-          ctx.lineTo(Math.cos(a - 0.18) * (r + 9), Math.sin(a - 0.18) * (r + 9));
-          ctx.closePath(); ctx.fill();
-        }
-      }
-      ctx.fillStyle = z.color;
-      ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.fill();
-      ctx.strokeStyle = z.edge; ctx.lineWidth = 2; ctx.stroke();
-      ctx.fillStyle = z.edge;
-      ctx.beginPath(); ctx.arc(Math.cos(-0.7) * r * 0.8, Math.sin(-0.7) * r * 0.8, r * 0.4, 0, TAU); ctx.fill();
-      ctx.beginPath(); ctx.arc(Math.cos(0.7) * r * 0.8, Math.sin(0.7) * r * 0.8, r * 0.4, 0, TAU); ctx.fill();
-      ctx.fillStyle = z.type === 'boss' ? '#ff5c5c' : '#ffe9c7';
-      for (const s of [-1, 1]) {
-        ctx.beginPath(); ctx.arc(Math.cos(s * 0.28) * r * 0.5, Math.sin(s * 0.28) * r * 0.5, (z.type === 'boss' ? 0.16 : 0.14) * r, 0, TAU); ctx.fill();
-      }
-      if (z.type === 'boss') {
-        ctx.strokeStyle = 'rgba(255,60,60,0.35)';
-        ctx.lineWidth = 3;
-        ctx.beginPath(); ctx.arc(0, 0, r + 7, 0, TAU); ctx.stroke();
-      }
-      ctx.strokeStyle = '#3a2b22';
-      ctx.lineWidth = Math.max(1.5, r * 0.12);
-      ctx.beginPath(); ctx.arc(r * 0.55, 0, r * 0.28, -0.6, 0.6); ctx.stroke();
-      if (z.flash > 0) {
-        ctx.fillStyle = 'rgba(255,255,255,' + (z.flash * 8).toFixed(3) + ')';
-        ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.fill();
-      }
-      if (z.type === 'boss' && z.ai.phase === 'windup') {
-        ctx.fillStyle = 'rgba(255,60,60,' + (0.25 + 0.2 * Math.sin(time * 30)).toFixed(3) + ')';
-        ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.fill();
-      }
-      ctx.restore();
-      if (z.type === 'boss' && z.ai.phase === 'windup') {
-        const ta = z.face;
-        ctx.strokeStyle = 'rgba(255,90,90,0.55)';
-        ctx.lineWidth = 3;
-        ctx.setLineDash([10, 8]);
-        ctx.beginPath();
-        ctx.moveTo(z.x + Math.cos(ta) * (r + 14), z.y + Math.sin(ta) * (r + 14));
-        ctx.lineTo(z.x + Math.cos(ta) * (r + 240), z.y + Math.sin(ta) * (r + 240));
-        ctx.stroke();
-        ctx.setLineDash([]);
-      }
-    }
-
-    // dash afterimages
-    for (const g of ghosts) {
-      const a = clamp(g.life / g.max, 0, 1);
-      ctx.globalAlpha = a * 0.35;
-      ctx.fillStyle = '#7fd4ff';
-      ctx.beginPath(); ctx.arc(g.x, g.y, player.r * (0.7 + 0.3 * a), 0, TAU); ctx.fill();
-    }
-    ctx.globalAlpha = 1;
-
-    // player
-    ctx.fillStyle = 'rgba(0,0,0,0.25)';
-    ctx.beginPath(); ctx.arc(player.x + 2, player.y + 3, player.r + 2, 0, TAU); ctx.fill();
-    if (player.dashT > 0) {
-      ctx.fillStyle = 'rgba(140,225,255,0.22)';
-      ctx.beginPath(); ctx.arc(player.x, player.y, player.r + 8, 0, TAU); ctx.fill();
-    }
-    ctx.save();
-    ctx.translate(player.x, player.y);
-    ctx.rotate(player.aim);
-    ctx.fillStyle = '#8f9aa6';
-    ctx.fillRect(player.r * 0.2, -3.5, player.r + 16, 7);
-    ctx.fillStyle = '#cfd6de';
-    ctx.fillRect(player.r * 0.2, -3.5, player.r + 16, 3);
-    ctx.fillStyle = '#d9a066';
-    ctx.beginPath(); ctx.arc(player.r * 0.85, -5, 4, 0, TAU); ctx.fill();
-    ctx.beginPath(); ctx.arc(player.r * 0.85, 5, 4, 0, TAU); ctx.fill();
-    ctx.restore();
-    ctx.fillStyle = '#3d5168';
-    ctx.beginPath(); ctx.arc(player.x, player.y, player.r, 0, TAU); ctx.fill();
-    ctx.strokeStyle = '#22303f'; ctx.lineWidth = 3; ctx.stroke();
-    if (muzzle > 0) {
-      const mmx = player.x + Math.cos(player.aim) * (player.r + 18);
-      const mmy = player.y + Math.sin(player.aim) * (player.r + 18);
-      ctx.fillStyle = 'rgba(255,226,140,' + (muzzle * 16).toFixed(3) + ')';
-      ctx.beginPath(); ctx.arc(mmx, mmy, 5, 0, TAU); ctx.fill();
-    }
+    // 2.5D depth-sorted sprite rendering (painter's algorithm)
+    const renderList = [];
+    for (const o of obstacles) renderList.push({ y: o.y + o.r * 0.5, draw: () => drawRock(o) });
+    for (const d of drops) renderList.push({ y: d.y, draw: () => drawDrop(d) });
+    for (const g of gems) renderList.push({ y: g.y, draw: () => drawGem(g) });
+    for (const gh of ghosts) renderList.push({ y: gh.y, draw: () => drawGhost(gh) });
+    for (const z of zombies) renderList.push({ y: z.y + z.r, draw: () => drawZombie(z) });
+    renderList.push({ y: player.y + player.r, draw: drawPlayer });
+    renderList.sort((a, b) => a.y - b.y);
+    for (const item of renderList) item.draw();
 
     // bullets
     for (const b of bullets) {
