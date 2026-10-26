@@ -159,6 +159,7 @@
   let combo = 0, comboTimer = 0, comboPulse = 0;
   let comboVisible = loadPref('zombie-waves.combo', true);
   let reducedFlash = loadPref('zombie-waves.reducedflash', false);
+  let highContrast = loadPref('zombie-waves.highcontrast', false);
   const COMBO_WINDOW = 3;
   const comboMult = () => 1 + Math.min(3, Math.floor(combo / 5)); // ×1 → ×4
   const xpNeed = () => 5 + level * 3;
@@ -258,6 +259,11 @@
     savePref('zombie-waves.reducedflash', reducedFlash);
     updateSettingsRows();
   }
+  function toggleHighContrast() {
+    highContrast = !highContrast;
+    savePref('zombie-waves.highcontrast', highContrast);
+    updateSettingsRows();
+  }
   function toggleShake() {
     shakeLevel = shakeLevel > 0 ? 0 : 100;
     savePref('zombie-waves.shakelevel', shakeLevel > 0);
@@ -272,6 +278,7 @@
     sfxVol = 100;
     comboVisible = true;
     reducedFlash = false;
+    highContrast = false;
     clearPref('zombie-waves.muted');
     clearPref('zombie-waves.hints');
     clearPref('zombie-waves.combo');
@@ -281,6 +288,7 @@
     clearPref('zombie-waves.musicvol');
     clearPref('zombie-waves.sfxvol');
     clearPref('zombie-waves.reducedflash');
+    clearPref('zombie-waves.highcontrast');
     btnMute.textContent = '🔊';
     applyAudioVolumes();
     showHints();
@@ -297,6 +305,7 @@
     { nm: 'Key Hints', ds: 'Show key hints on menus', get: () => hintsOn, on: '👁 On', off: '👁 Off', toggle: toggleHints },
     { nm: 'Combo Counter', ds: 'Show kill combo and multiplier in the HUD', get: () => comboVisible, on: '🔗 On', off: '🔗 Off', toggle: toggleComboHud },
     { nm: 'Reduced Flashing', ds: 'Soften screen flashes for light sensitivity', get: () => reducedFlash, on: '🛡 Reduced', off: '⚡ Full', toggle: toggleReducedFlash },
+    { nm: 'High Contrast', ds: 'Colorblind-friendly palette and outlines', get: () => highContrast, on: '◐ On', off: '◐ Off', toggle: toggleHighContrast },
     { nm: 'Screen Shake', ds: 'Camera motion intensity on hits and dashes', slider: true, get: () => shakeLevel, set: setShake },
   ];
   function setVolume(v) {
@@ -691,11 +700,14 @@
 
   // ---------- fx ----------
   const BLOOD = ['#a31621', '#7a0f1a', '#c1262e', '#8f1420'];
+  const HC_BLOOD = ['#1c2430', '#141a26', '#232c3d', '#18202e'];
+  const bloodPalette = () => (highContrast ? HC_BLOOD : BLOOD);
+  const stainColor = () => (highContrast ? 'rgba(22,30,46,0.6)' : 'rgba(105,16,16,0.5)');
   function blood(x, y, n, dirA, spread) {
     for (let i = 0; i < n; i++) {
       const a = dirA === undefined ? rand(0, TAU) : dirA + rand(-(spread || 0.8), spread || 0.8);
       const s = rand(60, 230);
-      parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: rand(0.3, 0.7), max: 0.7, size: rand(2, 5), c: pick(BLOOD), fr: 4, stain: Math.random() < 0.35 });
+      parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: rand(0.3, 0.7), max: 0.7, size: rand(2, 5), c: pick(bloodPalette()), fr: 4, stain: Math.random() < 0.35 });
     }
   }
   function addStain(x, y, r) {
@@ -1100,6 +1112,12 @@
     const lungeScale = 1 + (z.atkAnim > 0 ? Math.sin(lungeP * Math.PI) * 0.14 : 0);
     drawSpriteAt(sp, z.x, feetY + 2, s * lungeScale, false, Math.sin(z.wob * 5) * 0.06 + (z.atkAnim > 0 ? Math.sin(lungeP * Math.PI) * 0.18 : 0));
     const cy = feetY + 2 - (sp.h * s) / 2;
+    if (highContrast) {
+      // outline ring: keeps every entity readable against any background
+      ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(z.x, cy, z.r * s + 1, 0, TAU); ctx.stroke();
+    }
     if (z.atkAnim > 0) {
       // swipe arc sweeping across the facing direction
       ctx.strokeStyle = 'rgba(255,240,200,' + (1 - lungeP).toFixed(3) + ')';
@@ -1121,7 +1139,7 @@
       const by = feetY + 2 - sp.h * s - 9;
       ctx.fillStyle = 'rgba(0,0,0,0.45)';
       ctx.fillRect(z.x - w / 2, by, w, 4);
-      ctx.fillStyle = '#e5484d';
+      ctx.fillStyle = highContrast ? '#ffffff' : '#e5484d';
       ctx.fillRect(z.x - w / 2, by, w * clamp(z.hp / z.maxHp, 0, 1), 4);
     }
   }
@@ -1135,6 +1153,11 @@
     }
     const sp = ASSETS.player[dirIndex(player.facing)][player.moving ? Math.floor(player.anim / 9) % 4 : 0];
     drawSpriteAt(sp, player.x, feetY + 2, s, false, 0);
+    if (highContrast) {
+      ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(player.x, feetY + 2 - sp.h * s * 0.5, player.r * s + 1, 0, TAU); ctx.stroke();
+    }
     // gun rotates toward aim, held at chest height
     const gy = feetY + 2 - sp.h * s * 0.5;
     ctx.save();
@@ -1233,9 +1256,9 @@
     ctx.fillStyle = dg;
     ctx.fillRect(0, 0, WORLD, WORLD);
 
-    // blood stains soak into the ground
+    // blood stains soak into the ground (high contrast: dark slate vs red)
+    ctx.fillStyle = stainColor();
     for (const s of stains) {
-      ctx.fillStyle = 'rgba(105,16,16,0.5)';
       for (const b of s.blobs) {
         ctx.beginPath(); ctx.ellipse(s.x + b.x, s.y + b.y, b.r, b.r * 0.6, b.a, 0, TAU); ctx.fill();
       }
