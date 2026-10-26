@@ -86,6 +86,7 @@
   let waveActive = false, toSpawn = 0, spawned = 0, spawnTimer = 0, interTimer = 0;
   let shake = 0, hurtFlash = 0, muzzle = 0;
   let hitstop = 0, killFlash = 0;
+  let zoomPunch = 0;
   const xpNeed = () => 5 + level * 3;
 
   let score = 0, bossRef = null;
@@ -347,7 +348,7 @@
     });
     waveActive = false; interTimer = 2.5;
     state = 'playing'; paused = false; settingsOpen = false;
-    hitstop = 0; killFlash = 0;
+    hitstop = 0; killFlash = 0; zoomPunch = 0;
     shake = 0; hurtFlash = 0;
     hideAll();
     banner('GET READY');
@@ -418,6 +419,7 @@
       shake = Math.min(shake + 12, 18);
       hitstop = 0.12;
       killFlash = 0.9;
+      zoomPunch = 0.16;
       for (let i = 0; i < 8; i++) gems.push({ x: z.x + rand(-30, 30), y: z.y + rand(-30, 30), vx: rand(-90, 90), vy: rand(-90, 90) });
       drops.push({ x: z.x + rand(-15, 15), y: z.y + rand(-15, 15), t: 25, type: 'heal' });
       drops.push({ x: z.x + rand(-15, 15), y: z.y + rand(-15, 15), t: 25, type: 'weapon', weapon: Math.random() < 0.5 ? 'shotgun' : 'rifle' });
@@ -429,6 +431,7 @@
       shake = Math.min(shake + 3, 14);
       hitstop = Math.max(hitstop, 0.045);
       killFlash = Math.max(killFlash, 0.5);
+      zoomPunch = Math.min(zoomPunch + 0.035, 0.15);
       for (let i = 0; i < 4; i++) parts.push({ kind: 'gib', x: z.x, y: z.y, vx: rand(-160, 160), vy: rand(-160, 160), life: rand(0.4, 0.8), max: 0.8, size: rand(3.5, 6), c: pick(['#7a0f1a', '#5c0c14']), fr: 3, rot: rand(0, TAU), vr: rand(-8, 8), stain: true });
       addStain(z.x, z.y, rand(10, 17));
       gems.push({ x: z.x + rand(-8, 8), y: z.y + rand(-8, 8), vx: rand(-60, 60), vy: rand(-60, 60) });
@@ -603,6 +606,7 @@
     hurtFlash = Math.max(0, hurtFlash - dt);
     muzzle = Math.max(0, muzzle - dt);
     killFlash = Math.max(0, killFlash - dt * 3.5);
+    zoomPunch = Math.max(0, zoomPunch - dt * 2.2);
 
     // movement
     let mx = 0, my = 0;
@@ -746,6 +750,7 @@
           player.hitCd = 0.55;
           hurtFlash = 0.5;
           shake = Math.min(shake + 7, 14);
+          zoomPunch = Math.min(zoomPunch + 0.06, 0.15);
           sfx.hurt();
           const kb = Math.atan2(player.y - z.y, player.x - z.x);
           const kf = z.type === 'boss' ? 30 : 18;
@@ -800,6 +805,7 @@
           z.hp -= b.dmg;
           z.flash = 0.08;
           shake = Math.min(shake + (z.type === 'boss' ? 2.5 : 1.5), 14);
+          if (z.type === 'boss') zoomPunch = Math.min(zoomPunch + 0.03, 0.15);
           blood(b.x, b.y, 4, Math.atan2(b.vy, b.vx), 0.7);
           parts.push({ kind: 'flash', x: b.x, y: b.y, vx: 0, vy: 0, life: 0.12, max: 0.12, size: 7, c: '#fff2c0' });
           floats.push({ x: z.x + rand(-7, 7), y: z.y - z.r - 6, t: 0.75, max: 0.75, txt: String(Math.round(b.dmg)), kill: z.hp <= 0 });
@@ -1013,7 +1019,11 @@
 
     const shx = shakeOn ? rand(-shake, shake) : 0;
     const shy = shakeOn ? rand(-shake, shake) : 0;
+    const zoom = 1 + zoomPunch;
     ctx.save();
+    ctx.translate(vw / 2, vh / 2);
+    ctx.scale(zoom, zoom);
+    ctx.translate(-vw / 2, -vh / 2);
     ctx.translate(-cam.x + shx, -cam.y + shy);
 
     // ground
