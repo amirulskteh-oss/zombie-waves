@@ -113,7 +113,7 @@
     dashT: 0, dashCd: 0, hitCd: 0,
   };
   const cam = { x: 0, y: 0 };
-  let zombies = [], bullets = [], gems = [], drops = [], parts = [], floats = [], ghosts = [], obstacles = [];
+  let zombies = [], bullets = [], gems = [], drops = [], parts = [], floats = [], ghosts = [], obstacles = [], stains = [];
 
   // ---------- DOM ----------
   const elHp = $('hp'), elXpFill = $('xpfill'), elStats = $('stats'),
@@ -320,7 +320,7 @@
   // ---------- flow ----------
   function startRun() {
     zombies = []; bullets = []; gems = []; drops = []; parts = []; floats = [];
-    ghosts = []; obstacles = [];
+    ghosts = []; obstacles = []; stains = [];
     for (const k in perkLevels) delete perkLevels[k];
     credits = 0;
     let otries = 0;
@@ -412,6 +412,7 @@
       score += 250;
       credits += 20;
       blood(z.x, z.y, 36);
+      addStain(z.x, z.y, rand(22, 30));
       shake = Math.min(shake + 10, 18);
       for (let i = 0; i < 8; i++) gems.push({ x: z.x + rand(-30, 30), y: z.y + rand(-30, 30), vx: rand(-90, 90), vy: rand(-90, 90) });
       drops.push({ x: z.x + rand(-15, 15), y: z.y + rand(-15, 15), t: 25, type: 'heal' });
@@ -420,7 +421,9 @@
       tone(70, 30, 0.7, 'sawtooth', 0.1);
     } else {
       score += 10;
-      blood(z.x, z.y, 10);
+      blood(z.x, z.y, 12);
+      for (let i = 0; i < 4; i++) parts.push({ kind: 'gib', x: z.x, y: z.y, vx: rand(-160, 160), vy: rand(-160, 160), life: rand(0.4, 0.8), max: 0.8, size: rand(3.5, 6), c: pick(['#7a0f1a', '#5c0c14']), fr: 3, rot: rand(0, TAU), vr: rand(-8, 8), stain: true });
+      addStain(z.x, z.y, rand(10, 17));
       gems.push({ x: z.x + rand(-8, 8), y: z.y + rand(-8, 8), vx: rand(-60, 60), vy: rand(-60, 60) });
       const roll2 = Math.random();
       if (roll2 < 0.03) drops.push({ x: z.x, y: z.y, t: 25, type: 'weapon', weapon: Math.random() < 0.5 ? 'shotgun' : 'rifle' });
@@ -556,11 +559,18 @@
 
   // ---------- fx ----------
   const BLOOD = ['#a31621', '#7a0f1a', '#c1262e', '#8f1420'];
-  function blood(x, y, n) {
+  function blood(x, y, n, dirA, spread) {
     for (let i = 0; i < n; i++) {
-      const a = rand(0, TAU), s = rand(40, 170);
-      parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: rand(0.25, 0.55), max: 0.55, size: rand(2, 5), c: pick(BLOOD) });
+      const a = dirA === undefined ? rand(0, TAU) : dirA + rand(-(spread || 0.8), spread || 0.8);
+      const s = rand(60, 230);
+      parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: rand(0.3, 0.7), max: 0.7, size: rand(2, 5), c: pick(BLOOD), fr: 4, stain: Math.random() < 0.35 });
     }
+  }
+  function addStain(x, y, r) {
+    const blobs = [];
+    for (let i = 0; i < 3; i++) blobs.push({ x: rand(-r * 0.6, r * 0.6), y: rand(-r * 0.4, r * 0.4), r: rand(r * 0.3, r * 0.7), a: rand(0, TAU) });
+    stains.push({ x, y, blobs });
+    if (stains.length > 140) stains.shift();
   }
 
   function pushOutOfObstacles(e, entR) {
@@ -729,11 +739,11 @@
           hurtFlash = 0.5;
           shake = Math.min(shake + 7, 14);
           sfx.hurt();
-          blood(z.x, z.y, 4);
           const kb = Math.atan2(player.y - z.y, player.x - z.x);
           const kf = z.type === 'boss' ? 30 : 18;
           player.x = clamp(player.x + Math.cos(kb) * kf, 24, WORLD - 24);
           player.y = clamp(player.y + Math.sin(kb) * kf, 24, WORLD - 24);
+          blood(player.x, player.y, 6, kb, 1.2);
           if (player.hp <= 0) { player.hp = 0; gameOver(); return; }
         }
       }
@@ -781,7 +791,8 @@
           }
           z.hp -= b.dmg;
           z.flash = 0.08;
-          blood(b.x, b.y, 3);
+          blood(b.x, b.y, 4, Math.atan2(b.vy, b.vx), 0.7);
+          parts.push({ kind: 'flash', x: b.x, y: b.y, vx: 0, vy: 0, life: 0.12, max: 0.12, size: 7, c: '#fff2c0' });
           floats.push({ x: z.x, y: z.y - z.r - 6, t: 0.7, txt: String(Math.round(b.dmg)) });
           sfx.hit();
           if (z.hp <= 0) killZombie(z);
@@ -830,8 +841,14 @@
     for (let i = parts.length - 1; i >= 0; i--) {
       const p = parts[i];
       p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt;
-      if (p.life <= 0) parts.splice(i, 1);
+      if (p.fr) { const f = Math.max(0, 1 - p.fr * dt); p.vx *= f; p.vy *= f; }
+      if (p.vr) p.rot += p.vr * dt;
+      if (p.life <= 0) {
+        if (p.stain) addStain(p.x, p.y, rand(3, 7));
+        parts.splice(i, 1);
+      }
     }
+    if (parts.length > 400) parts.splice(0, parts.length - 400);
     for (let i = floats.length - 1; i >= 0; i--) {
       const f = floats[i];
       f.t -= dt; f.y -= 26 * dt;
@@ -1035,6 +1052,14 @@
     ctx.fillStyle = dg;
     ctx.fillRect(0, 0, WORLD, WORLD);
 
+    // blood stains soak into the ground
+    for (const s of stains) {
+      ctx.fillStyle = 'rgba(105,16,16,0.5)';
+      for (const b of s.blobs) {
+        ctx.beginPath(); ctx.ellipse(s.x + b.x, s.y + b.y, b.r, b.r * 0.6, b.a, 0, TAU); ctx.fill();
+      }
+    }
+
     // 2.5D depth-sorted sprite rendering (painter's algorithm)
     const renderList = [];
     for (const o of obstacles) renderList.push({ y: o.y + o.r * 0.5, draw: () => drawRock(o) });
@@ -1074,8 +1099,23 @@
     // particles
     for (const p of parts) {
       ctx.globalAlpha = clamp(p.life / p.max, 0, 1);
-      ctx.fillStyle = p.c;
-      ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, TAU); ctx.fill();
+      if (p.kind === 'flash') {
+        ctx.strokeStyle = p.c;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * (1.6 - (p.life / p.max)), 0, TAU);
+        ctx.stroke();
+      } else if (p.kind === 'gib') {
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rot || 0);
+        ctx.fillStyle = p.c;
+        ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.7);
+        ctx.restore();
+      } else {
+        ctx.fillStyle = p.c;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, TAU); ctx.fill();
+      }
     }
     ctx.globalAlpha = 1;
 
