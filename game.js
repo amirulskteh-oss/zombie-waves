@@ -160,6 +160,7 @@
   let comboVisible = loadPref('zombie-waves.combo', true);
   let reducedFlash = loadPref('zombie-waves.reducedflash', false);
   let highContrast = loadPref('zombie-waves.highcontrast', false);
+  let hudScale = loadNum('zombie-waves.hudscale', 100, 200);
   const COMBO_WINDOW = 3;
   const comboMult = () => 1 + Math.min(3, Math.floor(combo / 5)); // ×1 → ×4
   const xpNeed = () => 5 + level * 3;
@@ -170,7 +171,7 @@
   function saveHigh(v) { try { localStorage.setItem(HS_KEY, String(v)); } catch (e) { /* storage unavailable */ } }
   let highScore = loadHigh();
   function loadPref(key, dflt) { try { const v = localStorage.getItem(key); return v === null ? dflt : v === '1'; } catch (e) { return dflt; } }
-  function loadNum(key, dflt) { try { const v = parseInt(localStorage.getItem(key), 10); return isNaN(v) ? dflt : clamp(v, 0, 100); } catch (e) { return dflt; } }
+  function loadNum(key, dflt, max = 100) { try { const v = parseInt(localStorage.getItem(key), 10); return isNaN(v) ? dflt : clamp(v, 0, max); } catch (e) { return dflt; } }
   function savePref(key, v) { try { localStorage.setItem(key, v ? '1' : '0'); } catch (e) { /* storage unavailable */ } }
   function clearPref(key) { try { localStorage.removeItem(key); } catch (e) { /* storage unavailable */ } }
   let credits = 0;
@@ -207,6 +208,7 @@
 
   let bannerTimer = 0;
   function banner(txt) {
+    elBanner.style.fontSize = 'calc(clamp(34px, 8vw, 64px) * ' + (hudScale / 100).toFixed(2) + ')';
     elBanner.textContent = txt;
     elBanner.classList.remove('show');
     void elBanner.offsetWidth;
@@ -264,6 +266,11 @@
     savePref('zombie-waves.highcontrast', highContrast);
     updateSettingsRows();
   }
+  function setHudScale(v) {
+    hudScale = clamp(Math.round(v), 50, 200);
+    try { localStorage.setItem('zombie-waves.hudscale', String(hudScale)); } catch (e) { /* storage unavailable */ }
+  }
+  const hudFont = (px) => Math.round(px * hudScale / 100);
   function toggleShake() {
     shakeLevel = shakeLevel > 0 ? 0 : 100;
     savePref('zombie-waves.shakelevel', shakeLevel > 0);
@@ -279,6 +286,7 @@
     comboVisible = true;
     reducedFlash = false;
     highContrast = false;
+    hudScale = 100;
     clearPref('zombie-waves.muted');
     clearPref('zombie-waves.hints');
     clearPref('zombie-waves.combo');
@@ -289,6 +297,7 @@
     clearPref('zombie-waves.sfxvol');
     clearPref('zombie-waves.reducedflash');
     clearPref('zombie-waves.highcontrast');
+    clearPref('zombie-waves.hudscale');
     btnMute.textContent = '🔊';
     applyAudioVolumes();
     showHints();
@@ -306,6 +315,7 @@
     { nm: 'Combo Counter', ds: 'Show kill combo and multiplier in the HUD', get: () => comboVisible, on: '🔗 On', off: '🔗 Off', toggle: toggleComboHud },
     { nm: 'Reduced Flashing', ds: 'Soften screen flashes for light sensitivity', get: () => reducedFlash, on: '🛡 Reduced', off: '⚡ Full', toggle: toggleReducedFlash },
     { nm: 'High Contrast', ds: 'Colorblind-friendly palette and outlines', get: () => highContrast, on: '◐ On', off: '◐ Off', toggle: toggleHighContrast },
+    { nm: 'HUD Text Scale', ds: 'Size of in-game text and numbers', slider: true, get: () => hudScale, set: setHudScale },
     { nm: 'Screen Shake', ds: 'Camera motion intensity on hits and dashes', slider: true, get: () => shakeLevel, set: setShake },
   ];
   function setVolume(v) {
@@ -1315,8 +1325,7 @@
         ctx.beginPath();
         ctx.arc(rcx, rcy, rr2 + 15, -Math.PI / 2, -Math.PI / 2 + prog * TAU);
         ctx.stroke();
-        ctx.fillStyle = 'rgba(255,150,80,0.9)';
-        ctx.font = 'bold 11px "Segoe UI", system-ui, sans-serif';
+        ctx.font = 'bold ' + hudFont(11) + 'px "Segoe UI", system-ui, sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText('RELOADING', rcx, rcy + rr2 + 22);
       }
@@ -1376,7 +1385,7 @@
       const age = 1 - clamp(f.t / m, 0, 1);
       const scale = age < 0.18 ? 1.6 - (age / 0.18) * 0.6 : 1;
       ctx.globalAlpha = clamp((f.t / m) * 1.5, 0, 1);
-      ctx.font = 'bold ' + Math.round((f.kill ? 18 : 13) * scale) + 'px "Segoe UI", system-ui, sans-serif';
+      ctx.font = 'bold ' + Math.round((f.kill ? 18 : 13) * scale * hudScale / 100) + 'px "Segoe UI", system-ui, sans-serif';
       ctx.textAlign = 'center';
       ctx.lineWidth = 3;
       ctx.strokeStyle = 'rgba(0,0,0,0.7)';
@@ -1405,8 +1414,7 @@
       ctx.fillRect(bx, by, bw, 12);
       ctx.fillStyle = '#e5484d';
       ctx.fillRect(bx, by, bw * clamp(bossRef.hp / bossRef.maxHp, 0, 1), 12);
-      ctx.font = 'bold 11px "Segoe UI", system-ui, sans-serif';
-      ctx.textAlign = 'center';
+      ctx.font = 'bold ' + hudFont(11) + 'px "Segoe UI", system-ui, sans-serif';
       ctx.fillStyle = '#ffb3b3';
       ctx.fillText('MEGA ZOMBIE', vw / 2, by - 8);
     }
@@ -1426,10 +1434,10 @@
       ctx.scale(pulse, pulse);
       ctx.textAlign = 'center';
       ctx.fillStyle = '#ffd966';
-      ctx.font = 'bold 26px "Segoe UI", system-ui, sans-serif';
+      ctx.font = 'bold ' + hudFont(26) + 'px "Segoe UI", system-ui, sans-serif';
       ctx.fillText(combo + ' COMBO', 0, 0);
       ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 14px "Segoe UI", system-ui, sans-serif';
+      ctx.font = 'bold ' + hudFont(14) + 'px "Segoe UI", system-ui, sans-serif';
       ctx.fillText('×' + m + ' SCORE', 0, 20);
       const bw = 120;
       ctx.fillStyle = 'rgba(255,255,255,0.2)';
@@ -1453,6 +1461,7 @@
   function updateHud() {
     elHp.style.width = clamp((player.hp / player.maxHp) * 100, 0, 100) + '%';
     elXpFill.style.width = clamp((xp / xpNeed()) * 100, 0, 100) + '%';
+    elStats.style.fontSize = hudFont(14) + 'px';
     elStats.textContent = 'Wave ' + wave + '  ·  ' + kills + ' kills  ·  ' + fmt(time) + '  ·  Lv ' + level + '  ·  Score ' + score + '  ·  ' + WEAPONS[player.weapon].name + ' ' + (player.reloading > 0 ? 'RELOADING' : player.mag + '/' + player.magSize);
     elHurt.style.opacity = String(Math.min(hurtFlash, 1) * (reducedFlash ? 0.12 : 0.6));
   }
