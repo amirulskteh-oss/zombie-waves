@@ -85,7 +85,7 @@
   let wave = 0, kills = 0, level = 1, xp = 0, time = 0;
   let waveActive = false, toSpawn = 0, spawned = 0, spawnTimer = 0, interTimer = 0;
   let shake = 0, hurtFlash = 0, muzzle = 0;
-  let hitstop = 0;
+  let hitstop = 0, killFlash = 0;
   const xpNeed = () => 5 + level * 3;
 
   let score = 0, bossRef = null;
@@ -347,7 +347,7 @@
     });
     waveActive = false; interTimer = 2.5;
     state = 'playing'; paused = false; settingsOpen = false;
-    hitstop = 0;
+    hitstop = 0; killFlash = 0;
     shake = 0; hurtFlash = 0;
     hideAll();
     banner('GET READY');
@@ -417,6 +417,7 @@
       addStain(z.x, z.y, rand(22, 30));
       shake = Math.min(shake + 12, 18);
       hitstop = 0.12;
+      killFlash = 0.9;
       for (let i = 0; i < 8; i++) gems.push({ x: z.x + rand(-30, 30), y: z.y + rand(-30, 30), vx: rand(-90, 90), vy: rand(-90, 90) });
       drops.push({ x: z.x + rand(-15, 15), y: z.y + rand(-15, 15), t: 25, type: 'heal' });
       drops.push({ x: z.x + rand(-15, 15), y: z.y + rand(-15, 15), t: 25, type: 'weapon', weapon: Math.random() < 0.5 ? 'shotgun' : 'rifle' });
@@ -427,6 +428,7 @@
       blood(z.x, z.y, 12);
       shake = Math.min(shake + 3, 14);
       hitstop = Math.max(hitstop, 0.045);
+      killFlash = Math.max(killFlash, 0.5);
       for (let i = 0; i < 4; i++) parts.push({ kind: 'gib', x: z.x, y: z.y, vx: rand(-160, 160), vy: rand(-160, 160), life: rand(0.4, 0.8), max: 0.8, size: rand(3.5, 6), c: pick(['#7a0f1a', '#5c0c14']), fr: 3, rot: rand(0, TAU), vr: rand(-8, 8), stain: true });
       addStain(z.x, z.y, rand(10, 17));
       gems.push({ x: z.x + rand(-8, 8), y: z.y + rand(-8, 8), vx: rand(-60, 60), vy: rand(-60, 60) });
@@ -600,6 +602,7 @@
     shake = Math.max(0, shake - 26 * dt);
     hurtFlash = Math.max(0, hurtFlash - dt);
     muzzle = Math.max(0, muzzle - dt);
+    killFlash = Math.max(0, killFlash - dt * 3.5);
 
     // movement
     let mx = 0, my = 0;
@@ -1164,6 +1167,12 @@
       ctx.textAlign = 'center';
       ctx.fillStyle = '#ffb3b3';
       ctx.fillText('MEGA ZOMBIE', vw / 2, by - 8);
+    }
+
+    // kill flash (screen-space, punches every kill)
+    if (killFlash > 0) {
+      ctx.fillStyle = 'rgba(255,244,214,' + Math.min(killFlash * 0.35, 0.32).toFixed(3) + ')';
+      ctx.fillRect(0, 0, vw, vh);
     }
 
     // touch joystick
