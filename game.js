@@ -436,7 +436,6 @@
       score += 10;
       blood(z.x, z.y, 12);
       shake = Math.min(shake + 3, 14);
-      hitstop = Math.max(hitstop, z.type === 'brute' ? 0.08 : 0.045);
       if (z.type === 'brute') {
         killFlash = Math.max(killFlash, 0.5);
         slowmo = Math.max(slowmo, 0.35);
