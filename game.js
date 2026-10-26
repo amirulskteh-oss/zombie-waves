@@ -74,6 +74,8 @@
     level: () => { [440, 554, 659, 880].forEach((f, i) => tone(f, f, 0.12, 'triangle', 0.05, i * 0.08)); },
     roar: () => tone(90, 40, 0.5, 'sawtooth', 0.09),
     charge: () => tone(220, 90, 0.22, 'square', 0.05),
+    reload: () => { tone(600, 400, 0.05, 'square', 0.04); tone(900, 700, 0.05, 'square', 0.04, 0.12); },
+    reloadDone: () => tone(500, 900, 0.08, 'sine', 0.05),
     swing: () => tone(330, 140, 0.08, 'sine', 0.03),
     shotgun: () => tone(140, 55, 0.13, 'square', 0.055),
     rifle: () => tone(520, 80, 0.1, 'sawtooth', 0.05),
@@ -104,14 +106,15 @@
   const perkLevels = {};
 
   const WEAPONS = {
-    pistol: { name: 'PISTOL', dmg: 4, rate: 3.8, pellets: 1, spread: 0.05, speed: 640, life: 1.3, pierce: 0 },
-    shotgun: { name: 'SHOTGUN', dmg: 2.5, rate: 1.5, pellets: 6, spread: 0.24, speed: 560, life: 0.5, pierce: 0 },
-    rifle: { name: 'RIFLE', dmg: 9, rate: 1.7, pellets: 1, spread: 0.02, speed: 900, life: 1.3, pierce: 2 },
+    pistol: { name: 'PISTOL', dmg: 4, rate: 3.8, pellets: 1, spread: 0.05, speed: 640, life: 1.3, pierce: 0, mag: 12, reload: 1.0 },
+    shotgun: { name: 'SHOTGUN', dmg: 2.5, rate: 1.5, pellets: 6, spread: 0.24, speed: 560, life: 0.5, pierce: 0, mag: 6, reload: 1.7 },
+    rifle: { name: 'RIFLE', dmg: 9, rate: 1.7, pellets: 1, spread: 0.02, speed: 900, life: 1.3, pierce: 2, mag: 8, reload: 1.4 },
   };
   const player = {
     x: WORLD / 2, y: WORLD / 2, r: 15,
     hp: 100, maxHp: 100, speed: 235,
     dmgMul: 1, rateMul: 1, weapon: 'pistol', fireCd: 0, aim: -Math.PI / 2, facing: Math.PI / 2,
+    mag: 12, magSize: 12, reloading: 0, reloadTotal: 0,
     anim: 0, moving: false,
     regen: 0, dashCdMax: 2.4, magnet: 130,
     dashT: 0, dashCd: 0, hitCd: 0,
@@ -345,6 +348,7 @@
     Object.assign(player, {
       x: WORLD / 2, y: WORLD / 2, hp: 100, maxHp: 100, speed: 235,
       dmgMul: 1, rateMul: 1, weapon: 'pistol', fireCd: 0, aim: -Math.PI / 2, facing: Math.PI / 2,
+      mag: 12, magSize: 12, reloading: 0, reloadTotal: 0,
       anim: 0, moving: false,
       regen: 0, dashCdMax: 2.4, magnet: 130, dashT: 0, dashCd: 0, hitCd: 0,
     });
@@ -642,6 +646,19 @@
     player.y = clamp(player.y + my * spd * dt, 24, WORLD - 24);
     pushOutOfObstacles(player, player.r);
     if (player.regen > 0) player.hp = Math.min(player.maxHp, player.hp + player.regen * dt);
+    // magazine / auto-reload
+    if (player.reloading > 0) {
+      player.reloading -= dt;
+      if (player.reloading <= 0) {
+        player.reloading = 0;
+        player.mag = player.magSize;
+        sfx.reloadDone();
+      }
+    } else if (player.mag <= 0) {
+      player.reloading = WEAPONS[player.weapon].reload;
+      player.reloadTotal = player.reloading;
+      sfx.reload();
+    }
     if (player.hitCd > 0) player.hitCd -= dt;
 
     // waves / spawning
@@ -675,9 +692,10 @@
     }
     aimTargetRef = target;
     player.fireCd -= dt;
-    if (target && best < 560 * 560 && player.fireCd <= 0) {
+    if (target && best < 560 * 560 && player.fireCd <= 0 && player.reloading <= 0 && player.mag > 0) {
       const W = WEAPONS[player.weapon];
       player.fireCd = 1 / (W.rate * player.rateMul);
+      player.mag--;
       player.aim = Math.atan2(target.y - player.y, target.x - player.x);
       for (let p = 0; p < W.pellets; p++) {
         const a = player.aim + rand(-W.spread, W.spread);
@@ -850,6 +868,9 @@
         drops.splice(i, 1);
         if (d.type === 'weapon') {
           player.weapon = d.weapon;
+          player.magSize = WEAPONS[d.weapon].mag;
+          player.mag = player.magSize;
+          player.reloading = 0;
           floats.push({ x: d.x, y: d.y - 16, t: 1, max: 1, txt: WEAPONS[d.weapon].name + '!', kill: false });
           sfx.level();
         } else {
@@ -1104,7 +1125,13 @@
       const rr2 = (aimTargetRef.r + 9) * s;
       const rcx = aimTargetRef.x;
       const rcy = aimTargetRef.y - aimTargetRef.r * 1.1;
-      ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+      const lowAmmo = player.reloading <= 0 && player.mag <= Math.ceil(player.magSize * 0.25);
+      const reloadingNow = player.reloading > 0;
+      let retCol = 'rgba(255,255,255,';
+      let retA = 0.5;
+      if (reloadingNow) { retCol = 'rgba(255,150,80,'; retA = 0.75; }
+      else if (lowAmmo) { retCol = 'rgba(255,80,80,'; retA = 0.55 + 0.35 * Math.sin(time * 8); }
+      ctx.strokeStyle = retCol + retA.toFixed(3) + ')';
       ctx.lineWidth = 2;
       for (let i = 0; i < 4; i++) {
         const a = i * Math.PI / 2 + time * 0.8;
@@ -1124,6 +1151,18 @@
           ctx.lineTo(rcx + Math.cos(a) * rr2 * (0.9 + 0.25 * hm), rcy + Math.sin(a) * rr2 * (0.9 + 0.25 * hm));
           ctx.stroke();
         }
+      }
+      if (reloadingNow) {
+        const prog = 1 - player.reloading / player.reloadTotal;
+        ctx.strokeStyle = 'rgba(255,150,80,0.9)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(rcx, rcy, rr2 + 15, -Math.PI / 2, -Math.PI / 2 + prog * TAU);
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(255,150,80,0.9)';
+        ctx.font = 'bold 11px "Segoe UI", system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('RELOADING', rcx, rcy + rr2 + 22);
       }
     }
 
@@ -1236,7 +1275,7 @@
   function updateHud() {
     elHp.style.width = clamp((player.hp / player.maxHp) * 100, 0, 100) + '%';
     elXpFill.style.width = clamp((xp / xpNeed()) * 100, 0, 100) + '%';
-    elStats.textContent = 'Wave ' + wave + '  ·  ' + kills + ' kills  ·  ' + fmt(time) + '  ·  Lv ' + level + '  ·  Score ' + score + '  ·  ' + WEAPONS[player.weapon].name;
+    elStats.textContent = 'Wave ' + wave + '  ·  ' + kills + ' kills  ·  ' + fmt(time) + '  ·  Lv ' + level + '  ·  Score ' + score + '  ·  ' + WEAPONS[player.weapon].name + ' ' + (player.reloading > 0 ? 'RELOADING' : player.mag + '/' + player.magSize);
     elHurt.style.opacity = String(Math.min(hurtFlash, 1) * 0.6);
   }
 
